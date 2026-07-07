@@ -1,0 +1,1776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IB Study Notebook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/tabler-icons.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --accent: #2a52a0;
+    --accent-light: #e8edf8;
+    --border: #e4e7ed;
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --sidebar-bg: #ffffff;
+    --sidebar-border: #e4e7ed;
+    --text: #111318;
+    --text-2: #5a5f6e;
+    --text-3: #a0a7b8;
+    --radius-md: 8px;
+    --radius-lg: 14px;
+    --shadow: 0 1px 4px rgba(0,0,0,0.06);
+    --shadow-lg: 0 6px 20px rgba(0,0,0,0.1);
+
+    --jpn:   #c0392b;
+    --eng:   #6d3ab5;
+    --math:  #1a4f9b;
+    --phys:  #0f7a52;
+    --ess:   #4a8a2a;
+    --geo:   #1a7a8a;
+    --tok:   #7a3a9a;
+    --ee:    #8b4513;
+    --cas:   #2e7d32;
+    --univ:  #b8860b;
+  }
+
+  html { font-size: 16px; }
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ── Layout ── */
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 220px;
+    min-width: 220px;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 10;
+  }
+
+  .sidebar-logo {
+    padding: 1.5rem 1.25rem 1.25rem;
+    border-bottom: 1px solid var(--sidebar-border);
+  }
+  .sidebar-logo .title {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 18px;
+    color: var(--text);
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+  }
+  .sidebar-logo .subtitle {
+    font-size: 11px;
+    color: var(--text-3);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .sidebar-section {
+    padding: 1rem 1.25rem 0.4rem;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 1.25rem;
+    font-size: 13.5px;
+    color: var(--text-2);
+    cursor: pointer;
+    border-radius: 0;
+    transition: all 0.15s;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .sidebar-item:hover { background: var(--bg); color: var(--text); }
+  .sidebar-item.active { background: var(--accent-light); color: var(--accent); font-weight: 500; }
+  .sidebar-item i { font-size: 16px; }
+
+  .sidebar-subject {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 1.25rem;
+    font-size: 13px;
+    color: var(--text-2);
+    cursor: pointer;
+    background: none;
+    border: none;
+    width: 100%;
+    text-align: left;
+    font-family: 'DM Sans', sans-serif;
+    transition: color 0.15s;
+  }
+  .sidebar-subject:hover { color: var(--text); }
+  .sidebar-subject.active { color: var(--text); font-weight: 500; }
+  .sidebar-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .sidebar-bottom {
+    margin-top: auto;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--sidebar-border);
+  }
+  .stats-mini { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .stat-mini { text-align: center; background: var(--bg); border-radius: 6px; padding: 5px 2px; }
+  .stat-mini-num { font-size: 15px; font-weight: 500; color: var(--text); line-height: 1; }
+  .stat-mini-label { font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  /* ── Main ── */
+  .main { margin-left: 220px; flex: 1; min-height: 100vh; display: flex; flex-direction: column; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 0.875rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .topbar h1 { font-size: 17px; font-weight: 500; flex: 1; }
+
+  .search-wrap { position: relative; flex: 1; max-width: 320px; }
+  .search-wrap i {
+    position: absolute;
+    left: 10px; top: 50%; transform: translateY(-50%);
+    font-size: 15px;
+    color: var(--text-3);
+    pointer-events: none;
+  }
+  .search-input {
+    width: 100%;
+    padding: 8px 12px 8px 32px;
+    font-size: 13.5px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--text-3); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px;
+    font-size: 13.5px; font-weight: 500;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    background: var(--card);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--bg); }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { background: #1e3d80; border-color: #1e3d80; }
+  .btn-danger { color: #c0392b; border-color: rgba(192,57,43,0.25); background: rgba(192,57,43,0.04); }
+  .btn-danger:hover { background: rgba(192,57,43,0.1); }
+
+  /* ── Content ── */
+  .content { padding: 1.75rem 2rem; flex: 1; }
+
+  /* ── Cards ── */
+  .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .vocab-grid    { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .formula-grid  { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.1rem 1.2rem;
+    cursor: pointer;
+    transition: box-shadow 0.15s, border-color 0.15s, transform 0.12s;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .card:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); border-color: #c5cad6; }
+
+  .card-stripe {
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .card-stripe.jpn  { background: var(--jpn); }
+  .card-stripe.eng  { background: var(--eng); }
+  .card-stripe.math { background: var(--math); }
+  .card-stripe.phys { background: var(--phys); }
+  .card-stripe.ess  { background: var(--ess); }
+  .card-stripe.geo  { background: var(--geo); }
+  .card-stripe.tok  { background: var(--tok); }
+  .card-stripe.ee   { background: var(--ee); }
+  .card-stripe.cas  { background: var(--cas); }
+  .card-stripe.univ { background: var(--univ); }
+
+  .card-sub {
+    font-size: 10.5px; font-weight: 500; letter-spacing: 0.07em;
+    text-transform: uppercase; margin-top: 2px; margin-bottom: 6px;
+  }
+  .card-sub.jpn  { color: var(--jpn); }
+  .card-sub.eng  { color: var(--eng); }
+  .card-sub.math { color: var(--math); }
+  .card-sub.phys { color: var(--phys); }
+  .card-sub.ess  { color: var(--ess); }
+  .card-sub.geo  { color: var(--geo); }
+  .card-sub.tok  { color: var(--tok); }
+  .card-sub.ee   { color: var(--ee); }
+  .card-sub.cas  { color: var(--cas); }
+  .card-sub.univ { color: var(--univ); }
+
+  .card-title { font-size: 14.5px; font-weight: 500; line-height: 1.4; margin-bottom: 7px; }
+  .card-preview { font-size: 12.5px; color: var(--text-2); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+  .vocab-term  { font-size: 15px; font-weight: 500; margin-bottom: 5px; }
+  .vocab-def   { font-size: 12.5px; color: var(--text-2); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+  .vocab-ex    { font-size: 11.5px; color: var(--text-3); margin-top: 5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  .formula-name  { font-size: 15px; font-weight: 500; margin-bottom: 8px; }
+  .formula-expr  {
+    font-family: 'Courier New', monospace;
+    font-size: 14px; font-weight: 500;
+    background: var(--accent-light); color: var(--accent);
+    border-radius: var(--radius-md);
+    padding: 7px 11px; margin-bottom: 7px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .formula-desc  { font-size: 12.5px; color: var(--text-2); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .formula-unit  { font-size: 11.5px; color: var(--text-3); margin-top: 5px; }
+  .detail-formula-expr {
+    font-family: 'Courier New', monospace;
+    font-size: 17px; font-weight: 500;
+    background: var(--accent-light); color: var(--accent);
+    border-radius: var(--radius-md);
+    padding: 13px 16px; margin-bottom: 1.1rem;
+    word-break: break-all; line-height: 1.6;
+  }
+
+  .card-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 10px; padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .card-date { font-size: 11px; color: var(--text-3); }
+  .card-actions { display: flex; gap: 4px; }
+  .card-group {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10.5px; font-weight: 500; color: var(--accent);
+    background: var(--accent-light); border-radius: 20px;
+    padding: 2px 9px; max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .card-group i { font-size: 11px; flex-shrink: 0; }
+  .card-groups { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 7px; }
+
+  /* ── Tag input (multi-group chips) ── */
+  .tag-input-box {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    width: 100%; min-height: 42px;
+    padding: 6px 8px;
+    font-size: 14px; font-family: 'DM Sans', sans-serif;
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--bg); color: var(--text);
+    cursor: text;
+    transition: border-color 0.15s;
+  }
+  .tag-input-box:focus-within { border-color: var(--accent); }
+  .tag-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12.5px; font-weight: 500;
+    background: var(--accent-light); color: var(--accent);
+    border-radius: 20px; padding: 4px 6px 4px 11px;
+    white-space: nowrap;
+  }
+  .tag-chip button {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%;
+    border: none; background: rgba(42,82,160,0.15); color: var(--accent);
+    font-size: 11px; line-height: 1; cursor: pointer; padding: 0;
+    transition: background 0.12s;
+  }
+  .tag-chip button:hover { background: rgba(42,82,160,0.3); }
+  .tag-input-field {
+    flex: 1 1 80px; min-width: 80px;
+    border: none; outline: none; background: transparent;
+    font-size: 14px; font-family: 'DM Sans', sans-serif; color: var(--text);
+    padding: 4px 2px;
+  }
+  .icon-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-3); font-size: 15px;
+    padding: 3px 5px; border-radius: 5px;
+    transition: all 0.12s; line-height: 1;
+  }
+  .icon-btn:hover { background: rgba(0,0,0,0.06); color: var(--text-2); }
+  .icon-btn.del:hover { color: #c0392b; background: rgba(192,57,43,0.08); }
+
+  .add-card {
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius-lg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 7px; min-height: 130px;
+    color: var(--text-3); background: transparent;
+    cursor: pointer; font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s; padding: 1rem;
+  }
+  .add-card:hover { border-color: var(--accent); color: var(--text-2); background: var(--accent-light); }
+  .add-card i { font-size: 22px; }
+  .add-card span { font-size: 13px; }
+
+  /* ── Drag-to-reorder (Manual mode) ── */
+  .dragmode .card { cursor: grab; }
+  .dragmode .card:active { cursor: grabbing; }
+  .sortable-ghost   { opacity: 0.35; }
+  .sortable-chosen  { box-shadow: var(--shadow-lg); }
+  .sortable-drag    { box-shadow: var(--shadow-lg); }
+  .drag-hint {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-3);
+    margin-bottom: 12px;
+  }
+  .drag-hint i { font-size: 14px; }
+
+  .empty { text-align: center; padding: 4rem 2rem; color: var(--text-3); }
+  .empty i { font-size: 48px; display: block; margin-bottom: 1rem; opacity: 0.4; }
+  .empty p { font-size: 14px; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.45);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 2rem 1rem;
+    overflow-y: auto;
+  }
+  .modal {
+    background: var(--card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    padding: 1.75rem;
+    width: 100%;
+    max-width: 560px;
+    box-shadow: var(--shadow-lg);
+    margin: auto;
+    position: relative;
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.4rem;
+  }
+  .modal-header h2 { font-size: 17px; font-weight: 500; }
+  .modal-close { background: none; border: none; cursor: pointer; color: var(--text-3); font-size: 18px; padding: 2px; }
+  .modal-close:hover { color: var(--text); }
+
+  .form-row { margin-bottom: 1.1rem; }
+  .form-row label { display: block; font-size: 12px; font-weight: 500; color: var(--text-2); letter-spacing: 0.05em; margin-bottom: 5px; text-transform: uppercase; }
+  .form-row input,
+  .form-row textarea,
+  .form-row select {
+    width: 100%; padding: 9px 12px;
+    font-size: 14px; font-family: 'DM Sans', sans-serif;
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--bg); color: var(--text);
+    outline: none; transition: border-color 0.15s; resize: vertical;
+  }
+  .form-row input:focus,
+  .form-row textarea:focus,
+  .form-row select:focus { border-color: var(--accent); }
+  .form-row textarea { min-height: 100px; line-height: 1.65; }
+
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1.4rem; }
+
+  /* Detail modal */
+  .detail-sub-badge {
+    display: inline-block;
+    font-size: 11px; font-weight: 500; letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 3px 10px; border-radius: 20px;
+    background: var(--bg); color: var(--text-2);
+    margin-bottom: 0.75rem;
+  }
+  .detail-title { font-size: 20px; font-weight: 500; line-height: 1.35; margin-bottom: 1.25rem; }
+  .detail-section { margin-bottom: 1.1rem; }
+  .detail-label { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); margin-bottom: 6px; }
+  .detail-body { font-size: 14.5px; line-height: 1.75; white-space: pre-wrap; color: var(--text); }
+  .keypills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .keypill {
+    padding: 3px 11px; font-size: 12px;
+    border-radius: 20px; background: var(--accent-light);
+    color: var(--accent);
+  }
+  .modal-divider { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0; }
+
+  /* Quiz / Flashcard mode */
+  .flash-wrap { max-width: 500px; margin: 3rem auto; text-align: center; }
+  .flash-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 2.5rem 2rem;
+    box-shadow: var(--shadow-lg); min-height: 200px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    cursor: pointer; transition: transform 0.15s;
+  }
+  .flash-card:hover { transform: scale(1.01); }
+  .flash-subject { font-size: 11px; font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); margin-bottom: 0.75rem; }
+  .flash-term { font-size: 26px; font-weight: 500; line-height: 1.3; }
+  .flash-def { font-size: 15px; color: var(--text-2); line-height: 1.7; }
+  .flash-hint { font-size: 12px; color: var(--text-3); margin-top: 1.5rem; }
+  .flash-controls { display: flex; gap: 10px; justify-content: center; margin-top: 1.5rem; }
+  .flash-progress { font-size: 13px; color: var(--text-3); margin-bottom: 1.5rem; }
+
+  /* ── Format toolbar ── */
+  .fmt-wrap { position: relative; }
+  .fmt-toolbar {
+    display: flex; gap: 2px; padding: 4px 6px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-bottom: none; border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+  .fmt-wrap textarea {
+    border-radius: 0 0 var(--radius-md) var(--radius-md) !important;
+  }
+  .fmt-btn {
+    padding: 3px 8px; font-size: 13px; font-weight: 500;
+    border: none; background: transparent; cursor: pointer;
+    border-radius: 4px; color: var(--text-2);
+    font-family: 'DM Sans', sans-serif; line-height: 1.4;
+    transition: background 0.12s, color 0.12s;
+  }
+  .fmt-btn:hover { background: var(--card); color: var(--text); }
+  .fmt-btn.bold { font-weight: 700; }
+  .fmt-btn.strike { text-decoration: line-through; }
+  .fmt-sep { width: 1px; background: var(--border); margin: 3px 2px; }
+
+  .sidebar-io-btn {
+    flex: 1;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    padding: 7px 8px;
+    font-size: 12px; font-weight: 500;
+    border: 1px solid var(--sidebar-border);
+    border-radius: var(--radius-md);
+    background: var(--bg);
+    color: var(--text-2);
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s;
+    text-align: center;
+  }
+  .sidebar-io-btn:hover { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
+  .sidebar-io-btn i { font-size: 13px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 700px) {
+    .sidebar { width: 0; overflow: hidden; }
+    .main { margin-left: 0; }
+    .topbar { padding: 0.75rem 1rem; }
+    .content { padding: 1.25rem 1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="title">IB Study<br>Notebook</div>
+      <div class="subtitle">Your study companion</div>
+    </div>
+
+    <div class="sidebar-section">Menu</div>
+    <button class="sidebar-item active" onclick="setTab('case')" id="nav-case">
+      <i class="ti ti-files"></i> Case Studies
+    </button>
+    <button class="sidebar-item" onclick="setTab('vocab')" id="nav-vocab">
+      <i class="ti ti-vocabulary"></i> Vocabulary
+    </button>
+    <button class="sidebar-item" onclick="setTab('formula')" id="nav-formula">
+      <i class="ti ti-math"></i> Formulas
+    </button>
+    <button class="sidebar-item" onclick="setTab('exam')" id="nav-exam">
+      <i class="ti ti-clipboard-list"></i> Exam &amp; Criteria
+    </button>
+
+    <div class="sidebar-section" style="margin-top:0.5rem;">Subject Filter</div>
+    <button class="sidebar-subject active" onclick="setSubject('all')" id="subj-all">
+      <span class="sidebar-dot" style="background:#111318"></span> All
+    </button>
+    <button class="sidebar-subject" onclick="setSubject('jpn')" id="subj-jpn">
+      <span class="sidebar-dot" style="background:#b5451b"></span> Japanese
+    </button>
+    <button class="sidebar-subject" onclick="setSubject('eng')" id="subj-eng">
+      <span class="sidebar-dot" style="background:#5a3d7a"></span> English
+    </button>
+    <button class="sidebar-subject" onclick="setSubject('math')" id="subj-math">
+      <span class="sidebar-dot" style="background:#1a4f8b"></span> Math
+    </button>
+    <button class="sidebar-subject" onclick="setSubject('phys')" id="subj-phys">
+      <span class="sidebar-dot" style="background:#1a6b4a"></span> Physics
+    </button>
+    <button class="sidebar-subject" onclick="setSubject('ess')" id="subj-ess">
+      <span class="sidebar-dot" style="background:#4a7a2a"></span> ESS
+    </button>
+    <button class="sidebar-subject" onclick="setSubject('geo')" id="subj-geo">
+      <span class="sidebar-dot" style="background:#2a6b7a"></span> Geography
+    </button>
+    <button class="sidebar-subject" onclick="setSubject('tok')" id="subj-tok">
+      <span class="sidebar-dot" style="background:#7a3a9a"></span> TOK
+    </button>
+    <button class="sidebar-subject" onclick="setSubject('ee')" id="subj-ee">
+      <span class="sidebar-dot" style="background:#8b4513"></span> EE
+    </button>
+    <button class="sidebar-subject" onclick="setSubject('cas')" id="subj-cas">
+      <span class="sidebar-dot" style="background:#2e7d32"></span> CAS
+    </button>
+    <button class="sidebar-subject" onclick="setSubject('univ')" id="subj-univ">
+      <span class="sidebar-dot" style="background:#b8860b"></span> University
+    </button>
+
+    <div class="sidebar-bottom">
+      <div class="stats-mini">
+        <div class="stat-mini">
+          <div class="stat-mini-num" id="stat-cases">0</div>
+          <div class="stat-mini-label">Cases</div>
+        </div>
+        <div class="stat-mini">
+          <div class="stat-mini-num" id="stat-vocabs">0</div>
+          <div class="stat-mini-label">Vocab</div>
+        </div>
+        <div class="stat-mini">
+          <div class="stat-mini-num" id="stat-formulas">0</div>
+          <div class="stat-mini-label">Formulas</div>
+        </div>
+        <div class="stat-mini">
+          <div class="stat-mini-num" id="stat-subjs">0</div>
+          <div class="stat-mini-label">Subjects</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:12px;">
+        <button class="sidebar-io-btn" onclick="exportData()" title="Export all data as JSON">
+          <i class="ti ti-download"></i> Export
+        </button>
+        <label class="sidebar-io-btn" title="Import data from JSON file" style="cursor:pointer;">
+          <i class="ti ti-upload"></i> Import
+          <input type="file" accept=".json" onchange="importData(event)" style="display:none;" />
+        </label>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div class="main">
+    <header class="topbar">
+      <h1 id="topbar-title">Case Studies</h1>
+      <div class="search-wrap">
+        <i class="ti ti-search"></i>
+        <input type="text" class="search-input" id="search-input" placeholder="Search..." oninput="render()" />
+      </div>
+      <select class="btn" id="group-filter" onchange="render()" title="Filter by group" style="padding:8px 10px;">
+        <option value="">All Groups</option>
+      </select>
+      <button class="btn" id="sort-btn" onclick="toggleSort()" title="Sort order">
+        <i class="ti ti-arrows-move" id="sort-icon"></i>
+        <span id="sort-label">Manual</span>
+      </button>
+      <button class="btn btn-primary" id="add-btn" onclick="openAdd()">
+        <i class="ti ti-plus"></i> Add
+      </button>
+    </header>
+
+    <div class="content" id="main-content"></div>
+  </div>
+</div>
+
+<!-- Modal container -->
+<div id="modal-container"></div>
+<datalist id="group-suggestions"></datalist>
+
+<script>
+// ─────────────────────────────────────────────
+// Data helpers
+// ─────────────────────────────────────────────
+const SUBJECT_NAMES = { jpn:'Japanese', eng:'English', math:'Math', phys:'Physics', ess:'ESS', geo:'Geography', tok:'TOK', ee:'EE', cas:'CAS', univ:'University' };
+const SUBJECT_KEYS  = ['jpn','eng','math','phys','ess','geo','tok','ee','cas','univ'];
+
+let state = {
+  tab: 'case',
+  subject: 'all',
+  sort: 'manual',
+  cases:    [],
+  vocabs:   [],
+  formulas: [],
+  exams:    [],
+};
+
+function load() {
+  try { state.cases    = JSON.parse(localStorage.getItem('ib_cases')    || '[]'); } catch(e) { state.cases    = []; }
+  try { state.vocabs   = JSON.parse(localStorage.getItem('ib_vocabs')   || '[]'); } catch(e) { state.vocabs   = []; }
+  try { state.formulas = JSON.parse(localStorage.getItem('ib_formulas') || '[]'); } catch(e) { state.formulas = []; }
+  try { state.exams    = JSON.parse(localStorage.getItem('ib_exams')    || '[]'); } catch(e) { state.exams    = []; }
+  migrateExams();
+  migrateGroups();
+}
+
+// One-time migration: the single-value "group" field was upgraded to a
+// "groups" array so each item can carry multiple tags. Convert any legacy
+// string value into a one-element array (or empty array if absent) so
+// existing data keeps working with the new multi-tag UI.
+function migrateGroups() {
+  let changed = false;
+  [...state.cases, ...state.vocabs, ...state.formulas, ...state.exams].forEach(item => {
+    if (!Array.isArray(item.groups)) {
+      item.groups = (typeof item.group === 'string' && item.group.trim()) ? [item.group.trim()] : [];
+      changed = true;
+    }
+    if ('group' in item) { delete item.group; changed = true; }
+  });
+  if (changed) save();
+}
+
+// One-time migration: merge any legacy "notes" field into "criteria"
+// so existing entries keep their data after the two fields were combined.
+function migrateExams() {
+  let changed = false;
+  state.exams.forEach(e => {
+    if (e.notes && e.notes.trim()) {
+      e.criteria = e.criteria && e.criteria.trim()
+        ? e.criteria.trim() + '\n\n' + e.notes.trim()
+        : e.notes.trim();
+      delete e.notes;
+      changed = true;
+    } else if ('notes' in e) {
+      delete e.notes;
+      changed = true;
+    }
+  });
+  if (changed) save();
+}
+
+function save() {
+  localStorage.setItem('ib_cases',    JSON.stringify(state.cases));
+  localStorage.setItem('ib_vocabs',   JSON.stringify(state.vocabs));
+  localStorage.setItem('ib_formulas', JSON.stringify(state.formulas));
+  localStorage.setItem('ib_exams',    JSON.stringify(state.exams));
+}
+
+function esc(s) {
+  return (s||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Strip markdown markers for plain-text card previews
+function stripMd(s) {
+  return (s||'')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/~~(.+?)~~/g, '$1')
+    .replace(/`(.+?)`/g, '$1');
+}
+
+// Render **bold**, ~~strike~~, `code` in detail views
+function md(s) {
+  return esc(s)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/~~(.+?)~~/g, '<s>$1</s>')
+    .replace(/`(.+?)`/g, '<code style="font-family:monospace;font-size:13px;background:var(--bg);padding:1px 5px;border-radius:3px;">$1</code>')
+    .replace(/\n/g, '<br>');
+}
+
+function today() { return new Date().toISOString().slice(0,10); }
+function uid()   { return Date.now() + Math.random().toString(36).slice(2,6); }
+
+// ─────────────────────────────────────────────
+// Navigation
+// ─────────────────────────────────────────────
+const SORT_BTN = {
+  manual: ['ti ti-arrows-move',     'Manual'],
+  asc:    ['ti ti-sort-ascending',  '昇順'],
+  desc:   ['ti ti-sort-descending', '降順'],
+};
+
+function applySortButton() {
+  const [icon, label] = SORT_BTN[state.sort] || SORT_BTN.manual;
+  document.getElementById('sort-icon').className   = icon;
+  document.getElementById('sort-label').textContent = label;
+}
+
+function toggleSort() {
+  const order = ['manual', 'asc', 'desc'];
+  state.sort = order[(order.indexOf(state.sort) + 1) % order.length];
+  applySortButton();
+  render();
+}
+
+function getSorted(list) {
+  // Manual : drag to set the order (the saved array order).
+  // 昇順 asc : view that manual order from the front (same direction, view-only).
+  // 降順 desc: view that manual order from the back (reversed, view-only).
+  return state.sort === 'desc' ? [...list].reverse() : [...list];
+}
+
+function setTab(t) {
+  state.tab = t;
+  ['case','vocab','formula','exam'].forEach(k => {
+    document.getElementById('nav-'+k).classList.toggle('active', k===t);
+  });
+  const titles = { case:'Case Studies', vocab:'Vocabulary', formula:'Formulas', exam:'Exam & Criteria' };
+  document.getElementById('topbar-title').textContent = titles[t];
+  render();
+}
+
+function setSubject(s) {
+  state.subject = s;
+  ['all','jpn','eng','math','phys','ess','geo','tok','ee','cas','univ'].forEach(k => {
+    document.getElementById('subj-'+k).classList.toggle('active', k===s);
+  });
+  render();
+}
+
+// ─────────────────────────────────────────────
+// Render
+// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Groups (tag-like grouping across all content types)
+// ─────────────────────────────────────────────
+// "groups" is an array of free-text labels the user assigns when adding/
+// editing any item (Case, Vocab, Formula, Exam). Multiple items sharing a
+// group name belong to that group, and the group filter dropdown lets the
+// user quickly narrow the current tab down to just that group.
+// Render a row of small group-tag chips for card grids and detail modals.
+function groupChipsHTML(groups, variant) {
+  if (!groups || !groups.length) return '';
+  if (variant === 'detail') {
+    return groups.map(g =>
+      `<span class="detail-sub-badge" style="background:var(--accent-light);color:var(--accent);"><i class="ti ti-tag"></i> ${esc(g)}</span>`
+    ).join('');
+  }
+  return `<div class="card-groups">${groups.map(g =>
+    `<span class="card-group"><i class="ti ti-tag"></i>${esc(g)}</span>`
+  ).join('')}</div>`;
+}
+
+function allGroups() {
+  const s = new Set();
+  [...state.cases, ...state.vocabs, ...state.formulas, ...state.exams].forEach(item => {
+    (item.groups||[]).forEach(g => { if (g && g.trim()) s.add(g.trim()); });
+  });
+  return [...s].sort((a, b) => a.localeCompare(b, 'ja'));
+}
+
+function refreshGroupFilter() {
+  const sel = document.getElementById('group-filter');
+  if (!sel) return;
+  const current = sel.value;
+  const groups = allGroups();
+  sel.innerHTML = `<option value="">All Groups</option>` +
+    groups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
+  // Keep the previous selection if it still exists, otherwise reset to "All".
+  sel.value = groups.includes(current) ? current : '';
+}
+
+function getFiltered(list, isCase) {
+  const q = (document.getElementById('search-input')?.value||'').toLowerCase().trim();
+  const g = (document.getElementById('group-filter')?.value||'').trim();
+  return list.filter(item => {
+    if (state.subject !== 'all' && item.subject !== state.subject) return false;
+    if (g && !(item.groups||[]).includes(g)) return false;
+    if (!q) return true;
+    const text = isCase
+      ? [item.title, item.content, item.keyPoints, ...(item.groups||[])].join(' ').toLowerCase()
+      : [item.term, item.definition, item.example, ...(item.groups||[])].join(' ').toLowerCase();
+    return text.includes(q);
+  });
+}
+
+// ── Tag-input widget ───────────────────────────────────────
+// Renders a wide chip-style box where the user types a group name and
+// presses Enter/Comma to add it as a tag. Backspace on an empty field
+// removes the last tag. State is tracked in-memory per open form via a
+// data attribute on the box, and read back out at save time.
+function renderTagChips(boxId, tags) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  const field = box.querySelector('.tag-input-field');
+  box.querySelectorAll('.tag-chip').forEach(el => el.remove());
+  tags.forEach((tag, idx) => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    chip.innerHTML = `<span></span><button type="button" aria-label="Remove">✕</button>`;
+    chip.querySelector('span').textContent = tag;
+    chip.querySelector('button').addEventListener('click', () => {
+      tags.splice(idx, 1);
+      renderTagChips(boxId, tags);
+      field.focus();
+    });
+    box.insertBefore(chip, field);
+  });
+}
+
+function initTagInput(boxId, initialTags) {
+  const tags = [...(initialTags||[])];
+  const box = document.getElementById(boxId);
+  if (!box) return tags;
+  const field = box.querySelector('.tag-input-field');
+
+  function addFromField() {
+    const v = field.value.trim();
+    if (v && !tags.includes(v)) { tags.push(v); }
+    field.value = '';
+    renderTagChips(boxId, tags);
+  }
+
+  field.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter' || ev.key === ',') {
+      ev.preventDefault();
+      addFromField();
+    } else if (ev.key === 'Backspace' && !field.value && tags.length) {
+      tags.pop();
+      renderTagChips(boxId, tags);
+    }
+  });
+  field.addEventListener('blur', addFromField);
+  box.addEventListener('click', () => field.focus());
+
+  renderTagChips(boxId, tags);
+  return tags;
+}
+
+// Read out the current tags from a tag-input box at save time, including
+// any text still sitting in the input field that the user didn't press
+// Enter/Comma on (so a forgotten last tag isn't silently dropped).
+function readTagBox(boxId) {
+  const box = document.getElementById(boxId);
+  if (!box) return [];
+  const tags = [...box.querySelectorAll('.tag-chip > span')].map(el => el.textContent);
+  const field = box.querySelector('.tag-input-field');
+  const pending = field ? field.value.trim() : '';
+  if (pending && !tags.includes(pending)) tags.push(pending);
+  return tags;
+}
+
+// ─────────────────────────────────────────────
+// Drag-to-reorder (SortableJS) — active only in Manual sort mode
+// ─────────────────────────────────────────────
+let sortableInstance = null;
+const TYPE_KEY = { case:'cases', vocab:'vocabs', formula:'formulas', exam:'exams' };
+
+function destroySortable() {
+  if (sortableInstance) {
+    try { sortableInstance.destroy(); } catch(e) {}
+    sortableInstance = null;
+  }
+}
+
+function enableDrag(type) {
+  if (state.sort !== 'manual') return;
+  if (typeof Sortable === 'undefined') return;       // CDN unavailable → app still works, just no drag
+  const grid = document.getElementById('sortable-grid');
+  if (!grid) return;
+  grid.classList.add('dragmode');
+  sortableInstance = new Sortable(grid, {
+    animation: 150,              // surrounding cards slide into place (Puzzle&Dragons-style)
+    draggable: '.card',
+    filter: '.add-card',         // the "Add" tile is not draggable
+    delay: 150,                  // press-and-hold on touch so normal swipes still scroll
+    delayOnTouchOnly: true,
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    dragClass: 'sortable-drag',
+    onEnd: () => {
+      const ids = [...grid.querySelectorAll('.card')].map(el => el.dataset.id);
+      reorderByVisible(type, ids);
+    }
+  });
+}
+
+// Reorder the full array using the new order of the currently *visible* cards,
+// keeping hidden (filtered-out) items in their original slots.
+function reorderByVisible(type, newVisibleIds) {
+  const key = TYPE_KEY[type];
+  const arr = state[key];
+  if (!arr) return;
+  const visibleSet = new Set(newVisibleIds);
+  const slotCount = arr.reduce((n, i) => n + (visibleSet.has(i.id) ? 1 : 0), 0);
+  if (slotCount !== newVisibleIds.length) { render(); return; }   // mismatch → restore from data
+  const byId = {};
+  arr.forEach(x => { byId[x.id] = x; });
+  let p = 0;
+  const result = arr.map(item => visibleSet.has(item.id) ? byId[newVisibleIds[p++]] : item);
+  state[key] = result;
+  save();
+  // DOM already reflects the new order, so no re-render is needed here.
+}
+
+const DRAG_HINT = `<div class="drag-hint"><i class="ti ti-arrows-move"></i> Drag cards to reorder — this Manual order is saved</div>`;
+
+function render() {
+  destroySortable();
+  updateStats();
+  refreshGroupFilter();
+  const t = state.tab;
+  if      (t==='case')    renderCases();
+  else if (t==='vocab')   renderVocabs();
+  else if (t==='formula') renderFormulas();
+  else if (t==='exam')    renderExams();
+}
+
+function updateStats() {
+  document.getElementById('stat-cases').textContent    = state.cases.length;
+  document.getElementById('stat-vocabs').textContent   = state.vocabs.length;
+  document.getElementById('stat-formulas').textContent = state.formulas.length;
+  const s = new Set([
+    ...state.cases.map(c=>c.subject),
+    ...state.vocabs.map(v=>v.subject),
+    ...state.formulas.map(f=>f.subject),
+    ...state.exams.map(e=>e.subject)
+  ]);
+  document.getElementById('stat-subjs').textContent = s.size;
+}
+
+// ─────────────────────────────────────────────
+// Drag and drop
+// ─────────────────────────────────────────────
+function renderCases() {
+  const items = getSorted(getFiltered(state.cases, true));
+  const el = document.getElementById('main-content');
+  if (!state.cases.length) {
+    el.innerHTML = `<div class="empty"><i class="ti ti-files"></i><p>No case studies yet.<br>Press "Add" to create your first note.</p></div>`;
+    return;
+  }
+  const cards = items.length
+    ? items.map(c => `
+      <div class="card" data-id="${c.id}" onclick="openCaseDetail('${c.id}')">
+        <div class="card-stripe ${c.subject}"></div>
+        <div class="card-sub ${c.subject}">${SUBJECT_NAMES[c.subject]||c.subject}</div>
+        ${groupChipsHTML(c.groups)}
+        <div class="card-title">${esc(c.title)}</div>
+        <div class="card-preview">${esc(stripMd(c.content))}</div>
+        <div class="card-footer">
+          <span class="card-date">${c.date||''}</span>
+          <div class="card-actions">
+            <button class="icon-btn" onclick="event.stopPropagation();openEditCase('${c.id}')" title="Edit"><i class="ti ti-pencil"></i></button>
+            <button class="icon-btn del" onclick="event.stopPropagation();deleteCase('${c.id}')" title="Delete"><i class="ti ti-trash"></i></button>
+          </div>
+        </div>
+      </div>`).join('')
+    : `<div class="empty" style="grid-column:1/-1"><p>No results found</p></div>`;
+  el.innerHTML = `${state.sort==='manual'?DRAG_HINT:''}<div class="cards-grid" id="sortable-grid">
+    ${cards}
+    <button class="add-card" onclick="openAdd()"><i class="ti ti-plus"></i><span>Add Case Study</span></button>
+  </div>`;
+  enableDrag('case');
+}
+
+function renderVocabs() {
+  const items = getSorted(getFiltered(state.vocabs, false));
+  const el = document.getElementById('main-content');
+  if (!state.vocabs.length) {
+    el.innerHTML = `<div class="empty"><i class="ti ti-vocabulary"></i><p>No vocabulary yet.<br>Press "Add" to add your first term.</p></div>`;
+    return;
+  }
+  const cards = items.length
+    ? items.map(v => `
+      <div class="card" data-id="${v.id}" onclick="openVocabDetail('${v.id}')">
+        <div class="card-stripe ${v.subject}"></div>
+        <div class="card-sub ${v.subject}">${SUBJECT_NAMES[v.subject]||v.subject}</div>
+        ${groupChipsHTML(v.groups)}
+        <div class="vocab-term">${esc(v.term)}</div>
+        <div class="vocab-def">${esc(stripMd(v.definition))}</div>
+        ${v.example ? `<div class="vocab-ex">${esc(stripMd(v.example))}</div>` : ''}
+        <div class="card-footer">
+          <span class="card-date">${v.date||''}</span>
+          <div class="card-actions">
+            <button class="icon-btn" onclick="event.stopPropagation();openEditVocab('${v.id}')" title="Edit"><i class="ti ti-pencil"></i></button>
+            <button class="icon-btn del" onclick="event.stopPropagation();deleteVocab('${v.id}')" title="Delete"><i class="ti ti-trash"></i></button>
+          </div>
+        </div>
+      </div>`).join('')
+    : `<div class="empty" style="grid-column:1/-1"><p>No results found</p></div>`;
+  el.innerHTML = `${state.sort==='manual'?DRAG_HINT:''}<div class="vocab-grid" id="sortable-grid">
+    ${cards}
+    <button class="add-card" onclick="openAdd()"><i class="ti ti-plus"></i><span>Add Vocabulary</span></button>
+  </div>`;
+  enableDrag('vocab');
+}
+
+// ─────────────────────────────────────────────
+// Flashcard mode
+// ─────────────────────────────────────────────
+let flashState = { deck: [], idx: 0, flipped: false };
+
+function renderFlash() {
+  const el = document.getElementById('main-content');
+  let deck = state.vocabs.filter(v => state.subject==='all' || v.subject===state.subject);
+  if (!deck.length) {
+    el.innerHTML = `<div class="empty"><i class="ti ti-cards"></i><p>Please add Vocabulary entries first.</p></div>`;
+    return;
+  }
+  // shuffle
+  deck = [...deck].sort(() => Math.random()-0.5);
+  flashState = { deck, idx: 0, flipped: false };
+  renderFlashCard(el);
+}
+
+function renderFlashCard(el) {
+  const { deck, idx, flipped } = flashState;
+  if (!el) el = document.getElementById('main-content');
+  const v = deck[idx];
+  el.innerHTML = `<div class="flash-wrap">
+    <div class="flash-progress">${idx+1} / ${deck.length}</div>
+    <div class="flash-card" onclick="flipCard()">
+      ${!flipped ? `
+        <div class="flash-subject">${SUBJECT_NAMES[v.subject]||v.subject}</div>
+        <div class="flash-term">${esc(v.term)}</div>
+        <div class="flash-hint">Click to reveal definition</div>
+      ` : `
+        <div class="flash-subject">${esc(v.term)}</div>
+        <div class="flash-def">${esc(v.definition)}</div>
+        ${v.example ? `<div class="flash-hint" style="margin-top:1rem;">${esc(v.example)}</div>` : ''}
+      `}
+    </div>
+    <div class="flash-controls">
+      <button class="btn" onclick="prevCard()" ${idx===0?'disabled':''}>
+        <i class="ti ti-arrow-left"></i> Prev
+      </button>
+      <button class="btn" onclick="shuffleFlash()">
+        <i class="ti ti-refresh"></i> Shuffle
+      </button>
+      <button class="btn btn-primary" onclick="nextCard()" ${idx===deck.length-1?'disabled':''}>
+        Next <i class="ti ti-arrow-right"></i>
+      </button>
+    </div>
+  </div>`;
+}
+
+function flipCard() {
+  flashState.flipped = !flashState.flipped;
+  renderFlashCard();
+}
+function nextCard() {
+  if (flashState.idx < flashState.deck.length-1) { flashState.idx++; flashState.flipped=false; renderFlashCard(); }
+}
+function prevCard() {
+  if (flashState.idx > 0) { flashState.idx--; flashState.flipped=false; renderFlashCard(); }
+}
+function shuffleFlash() {
+  flashState.deck.sort(() => Math.random()-0.5);
+  flashState.idx=0; flashState.flipped=false; renderFlashCard();
+}
+
+// ─────────────────────────────────────────────
+// Subject options HTML helper
+// ─────────────────────────────────────────────
+function subjectOpts(sel) {
+  return SUBJECT_KEYS.map(k=>
+    `<option value="${k}"${sel===k?' selected':''}>${SUBJECT_NAMES[k]}</option>`
+  ).join('');
+}
+
+// ─────────────────────────────────────────────
+// Add / Edit Case
+// ─────────────────────────────────────────────
+function openAdd() {
+  const t = state.tab;
+  if      (t==='case')    openAddCase();
+  else if (t==='vocab')   openAddVocab();
+  else if (t==='formula') openAddFormula();
+  else if (t==='exam')    openAddExam();
+}
+
+function openAddCase(prefill={}) {
+  const isEdit = !!prefill.id;
+  const defaultSub = prefill.subject || (state.subject !== 'all' ? state.subject : 'jpn');
+  showModal(`
+    <div class="modal-header">
+      <h2>${isEdit?'Edit Case Study':'Add Case Study'}</h2>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="form-row">
+      <label>Subject</label>
+      <select id="f-sub">${subjectOpts(defaultSub)}</select>
+    </div>
+    <div class="form-row">
+      <label>Title / Company Name</label>
+      <input type="text" id="f-title" value="${esc(prefill.title||'')}" placeholder="e.g. Apple Inc. — Vertical Integration" />
+    </div>
+    <div class="form-row">
+      <label>Content &amp; Analysis</label>
+      <textarea id="f-content" style="min-height:120px;" placeholder="Add a summary or IB-context analysis...">${esc(prefill.content||'')}</textarea>
+    </div>
+    <div class="form-row">
+      <label>Key Points / Keywords (comma-separated)</label>
+      <input type="text" id="f-keys" value="${esc(prefill.keyPoints||'')}" placeholder="e.g. PED, market structure, monopoly" />
+    </div>
+    <div class="form-row">
+      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
+      <div class="tag-input-box" id="f-group-box">
+        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCase('${prefill.id||''}')">Save</button>
+    </div>
+  `);
+  document.getElementById('f-title').focus();
+  initTagInput('f-group-box', prefill.groups);
+}
+
+function saveCase(editId) {
+  const title  = document.getElementById('f-title').value.trim();
+  if (!title) { alert('Please enter a title'); return; }
+  const item = {
+    id:        editId || uid(),
+    subject:   document.getElementById('f-sub').value,
+    title,
+    content:   document.getElementById('f-content').value.trim(),
+    keyPoints: document.getElementById('f-keys').value.trim(),
+    groups:    readTagBox('f-group-box'),
+    date:      editId ? (state.cases.find(c=>c.id===editId)||{}).date||today() : today(),
+  };
+  if (editId) { const i=state.cases.findIndex(c=>c.id===editId); if(i>-1) state.cases[i]=item; }
+  else state.cases.unshift(item);
+  save(); closeModal(); render();
+}
+
+function openEditCase(id) {
+  const c = state.cases.find(x=>x.id===id); if(!c) return;
+  openAddCase(c);
+}
+
+function confirmDelete(message, onConfirm) {
+  const prev = document.getElementById('modal-container').innerHTML;
+  showModal(`
+    <div class="modal-header">
+      <h2>Confirm Delete</h2>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <p style="font-size:14px;color:var(--text-2);margin-bottom:1.5rem;">${message}</p>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" id="confirm-del-btn">Delete</button>
+    </div>
+  `);
+  document.getElementById('confirm-del-btn').onclick = () => { closeModal(); onConfirm(); };
+}
+
+function deleteCase(id) {
+  confirmDelete('Are you sure you want to delete this Case Study? This cannot be undone.', () => {
+    state.cases = state.cases.filter(c => c.id !== id);
+    save(); render();
+  });
+}
+
+// ─────────────────────────────────────────────
+// Add / Edit Vocab
+// ─────────────────────────────────────────────
+function openAddVocab(prefill={}) {
+  const isEdit = !!prefill.id;
+  const defaultSub = prefill.subject || (state.subject !== 'all' ? state.subject : 'jpn');
+  showModal(`
+    <div class="modal-header">
+      <h2>${isEdit?'Edit Vocabulary':'Add Vocabulary'}</h2>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="form-row">
+      <label>Subject</label>
+      <select id="f-sub">${subjectOpts(defaultSub)}</select>
+    </div>
+    <div class="form-row">
+      <label>Term</label>
+      <input type="text" id="f-term" value="${esc(prefill.term||'')}" placeholder="e.g. Price Elasticity of Demand" />
+    </div>
+    <div class="form-row">
+      <label>Definition</label>
+      <textarea id="f-def" style="min-height:90px;" placeholder="Enter a definition aligned with IB marking criteria...">${esc(prefill.definition||'')}</textarea>
+    </div>
+    <div class="form-row">
+      <label>Example / Usage (optional)</label>
+      <input type="text" id="f-ex" value="${esc(prefill.example||'')}" placeholder="e.g. The PED of luxury goods is typically greater than 1." />
+    </div>
+    <div class="form-row">
+      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
+      <div class="tag-input-box" id="f-group-box">
+        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveVocab('${prefill.id||''}')">Save</button>
+    </div>
+  `);
+  document.getElementById('f-term').focus();
+  initTagInput('f-group-box', prefill.groups);
+}
+
+function saveVocab(editId) {
+  const term = document.getElementById('f-term').value.trim();
+  if (!term) { alert('Please enter a term'); return; }
+  const item = {
+    id:         editId || uid(),
+    subject:    document.getElementById('f-sub').value,
+    term,
+    definition: document.getElementById('f-def').value.trim(),
+    example:    document.getElementById('f-ex').value.trim(),
+    groups:    readTagBox('f-group-box'),
+    date:       editId ? (state.vocabs.find(v=>v.id===editId)||{}).date||today() : today(),
+  };
+  if (editId) { const i=state.vocabs.findIndex(v=>v.id===editId); if(i>-1) state.vocabs[i]=item; }
+  else state.vocabs.unshift(item);
+  save(); closeModal(); render();
+}
+
+function openEditVocab(id) {
+  const v = state.vocabs.find(x=>x.id===id); if(!v) return;
+  openAddVocab(v);
+}
+
+function deleteVocab(id) {
+  confirmDelete('Are you sure you want to delete this Vocabulary entry? This cannot be undone.', () => {
+    state.vocabs = state.vocabs.filter(v => v.id !== id);
+    save(); render();
+  });
+}
+
+// ─────────────────────────────────────────────
+// Detail modals
+// ─────────────────────────────────────────────
+function openCaseDetail(id) {
+  const c = state.cases.find(x=>x.id===id); if(!c) return;
+  const keys = (c.keyPoints||'').split(',').map(k=>k.trim()).filter(Boolean);
+  showModal(`
+    <div class="modal-header">
+      <div></div>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <span class="detail-sub-badge">${SUBJECT_NAMES[c.subject]||c.subject}</span>
+    ${groupChipsHTML(c.groups, 'detail')}
+    <div class="detail-title">${esc(c.title)}</div>
+    ${c.content ? `<div class="detail-section"><div class="detail-label">Content &amp; Analysis</div><div class="detail-body">${md(c.content)}</div></div>` : ''}
+    ${keys.length ? `<div class="detail-section"><div class="detail-label">Key Points</div><div class="keypills">${keys.map(k=>`<span class="keypill">${esc(k)}</span>`).join('')}</div></div>` : ''}
+    <hr class="modal-divider" />
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span style="font-size:12px;color:var(--text-3);">${c.date||''}</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-danger" onclick="deleteCase('${c.id}')"><i class="ti ti-trash"></i> Delete</button>
+        <button class="btn" onclick="closeModal();openEditCase('${c.id}')"><i class="ti ti-pencil"></i> Edit</button>
+        <button class="btn btn-primary" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  `);
+}
+
+function openVocabDetail(id) {
+  const v = state.vocabs.find(x=>x.id===id); if(!v) return;
+  showModal(`
+    <div class="modal-header">
+      <div></div>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <span class="detail-sub-badge">${SUBJECT_NAMES[v.subject]||v.subject}</span>
+    ${groupChipsHTML(v.groups, 'detail')}
+    <div class="detail-title">${esc(v.term)}</div>
+    ${v.definition ? `<div class="detail-section"><div class="detail-label">Definition</div><div class="detail-body">${md(v.definition)}</div></div>` : ''}
+    ${v.example ? `<div class="detail-section"><div class="detail-label">Example / Usage</div><div class="detail-body">${md(v.example)}</div></div>` : ''}
+    <hr class="modal-divider" />
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span style="font-size:12px;color:var(--text-3);">${v.date||''}</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-danger" onclick="deleteVocab('${v.id}')"><i class="ti ti-trash"></i> Delete</button>
+        <button class="btn" onclick="closeModal();openEditVocab('${v.id}')"><i class="ti ti-pencil"></i> Edit</button>
+        <button class="btn btn-primary" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  `);
+}
+
+// ─────────────────────────────────────────────
+// Formulas
+// ─────────────────────────────────────────────
+function renderFormulas() {
+  const el = document.getElementById('main-content');
+  const q  = (document.getElementById('search-input')?.value||'').toLowerCase().trim();
+  const g  = (document.getElementById('group-filter')?.value||'').trim();
+  const items = getSorted(state.formulas.filter(f => {
+    if (state.subject !== 'all' && f.subject !== state.subject) return false;
+    if (g && !(f.groups||[]).includes(g)) return false;
+    if (!q) return true;
+    return [f.name, f.expression, f.description, f.units, ...(f.groups||[])].join(' ').toLowerCase().includes(q);
+  }));
+
+  if (!state.formulas.length) {
+    el.innerHTML = `<div class="empty"><i class="ti ti-math"></i><p>No formulas yet.<br>Press "Add" to save your first formula.</p></div>`;
+    return;
+  }
+
+  const cards = items.length
+    ? items.map(f => `
+      <div class="card" data-id="${f.id}" onclick="openFormulaDetail('${f.id}')">
+        <div class="card-stripe ${f.subject}"></div>
+        <div class="card-sub ${f.subject}">${SUBJECT_NAMES[f.subject]||f.subject}</div>
+        ${groupChipsHTML(f.groups)}
+        <div class="formula-name">${esc(f.name)}</div>
+        <div class="formula-expr">${esc(f.expression)}</div>
+        ${f.description ? `<div class="formula-desc">${esc(stripMd(f.description))}</div>` : ''}
+        ${f.units ? `<div class="formula-unit">Units: ${esc(f.units)}</div>` : ''}
+        <div class="card-footer">
+          <span class="card-date">${f.date||''}</span>
+          <div class="card-actions">
+            <button class="icon-btn" onclick="event.stopPropagation();openEditFormula('${f.id}')" title="Edit"><i class="ti ti-pencil"></i></button>
+            <button class="icon-btn del" onclick="event.stopPropagation();deleteFormula('${f.id}')" title="Delete"><i class="ti ti-trash"></i></button>
+          </div>
+        </div>
+      </div>`).join('')
+    : `<div class="empty" style="grid-column:1/-1"><p>No results found</p></div>`;
+
+  el.innerHTML = `${state.sort==='manual'?DRAG_HINT:''}<div class="formula-grid" id="sortable-grid">
+    ${cards}
+    <button class="add-card" onclick="openAdd()"><i class="ti ti-plus"></i><span>Add Formula</span></button>
+  </div>`;
+  enableDrag('formula');
+}
+
+function openAddFormula(prefill={}) {
+  const isEdit = !!prefill.id;
+  const defaultSub = prefill.subject || (state.subject !== 'all' ? state.subject : 'phys');
+  showModal(`
+    <div class="modal-header">
+      <h2>${isEdit ? 'Edit Formula' : 'Add Formula'}</h2>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="form-row">
+      <label>Subject</label>
+      <select id="f-sub">${subjectOpts(defaultSub)}</select>
+    </div>
+    <div class="form-row">
+      <label>Formula Name</label>
+      <input type="text" id="f-name" value="${esc(prefill.name||'')}" placeholder="e.g. Newton's Second Law" />
+    </div>
+    <div class="form-row">
+      <label>Expression</label>
+      <input type="text" id="f-expr" value="${esc(prefill.expression||'')}" placeholder="e.g. F = ma" style="font-family:'Courier New',monospace; font-size:15px;" />
+    </div>
+    <div class="form-row">
+      <label>Units (optional)</label>
+      <input type="text" id="f-units" value="${esc(prefill.units||'')}" placeholder="e.g. N = kg·m/s²" />
+    </div>
+    <div class="form-row">
+      <label>Description / Variables (optional)</label>
+      <textarea id="f-desc" style="min-height:90px;" placeholder="Explain each variable, when to use this formula, derivation notes...">${esc(prefill.description||'')}</textarea>
+    </div>
+    <div class="form-row">
+      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
+      <div class="tag-input-box" id="f-group-box">
+        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveFormula('${prefill.id||''}')">Save</button>
+    </div>
+  `);
+  document.getElementById('f-name').focus();
+  initTagInput('f-group-box', prefill.groups);
+}
+
+function saveFormula(editId) {
+  const name = document.getElementById('f-name').value.trim();
+  const expression = document.getElementById('f-expr').value.trim();
+  if (!name) { alert('Please enter a formula name'); return; }
+  if (!expression) { alert('Please enter an expression'); return; }
+  const item = {
+    id:          editId || uid(),
+    subject:     document.getElementById('f-sub').value,
+    name,
+    expression,
+    units:       document.getElementById('f-units').value.trim(),
+    description: document.getElementById('f-desc').value.trim(),
+    groups:    readTagBox('f-group-box'),
+    date:        editId ? (state.formulas.find(f=>f.id===editId)||{}).date||today() : today(),
+  };
+  if (editId) { const i = state.formulas.findIndex(f=>f.id===editId); if(i>-1) state.formulas[i]=item; }
+  else state.formulas.unshift(item);
+  save(); closeModal(); render();
+}
+
+function openEditFormula(id) {
+  const f = state.formulas.find(x=>x.id===id); if(!f) return;
+  openAddFormula(f);
+}
+
+function deleteFormula(id) {
+  confirmDelete('Are you sure you want to delete this formula? This cannot be undone.', () => {
+    state.formulas = state.formulas.filter(f => f.id !== id);
+    save(); render();
+  });
+}
+
+function openFormulaDetail(id) {
+  const f = state.formulas.find(x=>x.id===id); if(!f) return;
+  showModal(`
+    <div class="modal-header">
+      <div></div>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <span class="detail-sub-badge">${SUBJECT_NAMES[f.subject]||f.subject}</span>
+    ${groupChipsHTML(f.groups, 'detail')}
+    <div class="detail-title">${esc(f.name)}</div>
+    <div class="detail-formula-expr">${esc(f.expression)}</div>
+    ${f.units ? `<div class="detail-section"><div class="detail-label">Units</div><div class="detail-body">${esc(f.units)}</div></div>` : ''}
+    ${f.description ? `<div class="detail-section"><div class="detail-label">Description / Variables</div><div class="detail-body">${md(f.description)}</div></div>` : ''}
+    <hr class="modal-divider" />
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span style="font-size:12px;color:var(--text-3);">${f.date||''}</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-danger" onclick="deleteFormula('${f.id}')"><i class="ti ti-trash"></i> Delete</button>
+        <button class="btn" onclick="closeModal();openEditFormula('${f.id}')"><i class="ti ti-pencil"></i> Edit</button>
+        <button class="btn btn-primary" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  `);
+}
+
+// ─────────────────────────────────────────────
+// Exam & Criteria
+// ─────────────────────────────────────────────
+function renderExams() {
+  const el = document.getElementById('main-content');
+  const q  = (document.getElementById('search-input')?.value||'').toLowerCase().trim();
+  const g  = (document.getElementById('group-filter')?.value||'').trim();
+  const items = getSorted(state.exams.filter(e => {
+    if (state.subject !== 'all' && e.subject !== state.subject) return false;
+    if (g && !(e.groups||[]).includes(g)) return false;
+    if (!q) return true;
+    return [e.title, e.type, e.criteria, ...(e.groups||[])].join(' ').toLowerCase().includes(q);
+  }));
+
+  if (!state.exams.length) {
+    el.innerHTML = `<div class="empty"><i class="ti ti-clipboard-list"></i><p>No exams or criteria yet.<br>Press "Add" to get started.</p></div>`;
+    return;
+  }
+
+  const TYPE_COLORS = { Paper1:'#1a4f8b', Paper2:'#1a4f8b', Paper3:'#1a4f8b', IA:'#4a7a2a', EE:'#8b3a2a', IOC:'#5a3d7a', HL:'#b5451b', SL:'#2a6b7a', Other:'#6b5a3a' };
+
+  const cards = items.length
+    ? items.map(e => {
+        const tc = TYPE_COLORS[e.type]||'#555';
+        return `<div class="card" data-id="${e.id}" onclick="openExamDetail('${e.id}')">
+          <div class="card-stripe ${e.subject}"></div>
+          <div style="display:flex;align-items:center;gap:7px;margin-top:2px;margin-bottom:7px;">
+            <span style="font-size:10px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:${tc};background:${tc}18;padding:2px 8px;border-radius:20px;">${esc(e.type)}</span>
+            <span class="card-sub ${e.subject}" style="margin:0;">${SUBJECT_NAMES[e.subject]||e.subject}</span>
+          </div>
+          ${groupChipsHTML(e.groups)}
+          <div class="card-title">${esc(e.title)}</div>
+          ${e.criteria ? `<div class="card-preview">${esc(stripMd(e.criteria))}</div>` : ''}
+          <div class="card-footer">
+            <span class="card-date">${e.date||''}</span>
+            <div class="card-actions">
+              <button class="icon-btn" onclick="event.stopPropagation();openEditExam('${e.id}')" title="Edit"><i class="ti ti-pencil"></i></button>
+              <button class="icon-btn del" onclick="event.stopPropagation();deleteExam('${e.id}')" title="Delete"><i class="ti ti-trash"></i></button>
+            </div>
+          </div>
+        </div>`;
+      }).join('')
+    : `<div class="empty" style="grid-column:1/-1"><p>No results found</p></div>`;
+
+  el.innerHTML = `${state.sort==='manual'?DRAG_HINT:''}<div class="cards-grid" id="sortable-grid">
+    ${cards}
+    <button class="add-card" onclick="openAdd()"><i class="ti ti-plus"></i><span>Add Exam</span></button>
+  </div>`;
+  enableDrag('exam');
+}
+
+function openAddExam(prefill={}) {
+  const isEdit = !!prefill.id;
+  const TYPES = ['Paper 1','Paper 2','Paper 3','IA','EE','IOC','HL Essay','SL Essay','Other'];
+  const typeOpts = TYPES.map(t=>`<option value="${t}"${prefill.type===t?' selected':''}>${t}</option>`).join('');
+  showModal(`
+    <div class="modal-header">
+      <h2>${isEdit?'Edit Exam & Criteria':'Add Exam & Criteria'}</h2>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="form-row">
+      <label>Subject</label>
+      <select id="f-sub">${subjectOpts(prefill.subject || (state.subject !== 'all' ? state.subject : 'jpn'))}</select>
+    </div>
+    <div class="form-row">
+      <label>Exam Type</label>
+      <select id="f-type">${typeOpts}</select>
+    </div>
+    <div class="form-row">
+      <label>Title / Component Name</label>
+      <input type="text" id="f-title" value="${esc(prefill.title||'')}" placeholder="e.g. Paper 2 — Extended Response" />
+    </div>
+    <div class="form-row">
+      <label>Marking Criteria and Note</label>
+      <textarea id="f-criteria" style="min-height:150px;" placeholder="Enter each criterion, marks awarded, and key points, together with prep notes, strategy, and time-management tips...">${esc(prefill.criteria||'')}</textarea>
+    </div>
+    <div class="form-row">
+      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
+      <div class="tag-input-box" id="f-group-box">
+        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveExam('${prefill.id||''}')">Save</button>
+    </div>
+  `);
+  document.getElementById('f-title').focus();
+  initTagInput('f-group-box', prefill.groups);
+}
+
+function saveExam(editId) {
+  const title = document.getElementById('f-title').value.trim();
+  if (!title) { alert('Please enter a title'); return; }
+  const item = {
+    id:       editId || uid(),
+    subject:  document.getElementById('f-sub').value,
+    type:     document.getElementById('f-type').value,
+    title,
+    criteria: document.getElementById('f-criteria').value.trim(),
+    groups:    readTagBox('f-group-box'),
+    date:     editId ? (state.exams.find(e=>e.id===editId)||{}).date||today() : today(),
+  };
+  if (editId) { const i=state.exams.findIndex(e=>e.id===editId); if(i>-1) state.exams[i]=item; }
+  else state.exams.unshift(item);
+  save(); closeModal(); render();
+}
+
+function openEditExam(id) {
+  const e = state.exams.find(x=>x.id===id); if(!e) return;
+  openAddExam(e);
+}
+
+function deleteExam(id) {
+  confirmDelete('Are you sure you want to delete this Exam & Criteria entry? This cannot be undone.', () => {
+    state.exams = state.exams.filter(e => e.id !== id);
+    save(); render();
+  });
+}
+
+function openExamDetail(id) {
+  const e = state.exams.find(x=>x.id===id); if(!e) return;
+  showModal(`
+    <div class="modal-header">
+      <div></div>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:0.6rem;">
+      <span class="detail-sub-badge">${SUBJECT_NAMES[e.subject]||e.subject}</span>
+      <span class="detail-sub-badge" style="background:var(--accent-light);color:var(--accent);">${esc(e.type)}</span>
+      ${groupChipsHTML(e.groups, 'detail')}
+    </div>
+    <div class="detail-title">${esc(e.title)}</div>
+    ${e.criteria ? `<div class="detail-section"><div class="detail-label">Marking Criteria and Note</div><div class="detail-body">${md(e.criteria)}</div></div>` : ''}
+    <hr class="modal-divider" />
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span style="font-size:12px;color:var(--text-3);">${e.date||''}</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-danger" onclick="deleteExam('${e.id}')"><i class="ti ti-trash"></i> Delete</button>
+        <button class="btn" onclick="closeModal();openEditExam('${e.id}')"><i class="ti ti-pencil"></i> Edit</button>
+        <button class="btn btn-primary" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  `);
+}
+
+
+// ─────────────────────────────────────────────
+// Text formatting toolbar
+// ─────────────────────────────────────────────
+function fmtWrap(marker, taId) {
+  const ta = document.getElementById(taId);
+  if (!ta) return;
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  const sel = ta.value.slice(start, end);
+  if (!sel) return;
+  const mlen = marker.length;
+  if (sel.startsWith(marker) && sel.endsWith(marker) && sel.length > mlen * 2) {
+    ta.setRangeText(sel.slice(mlen, sel.length - mlen), start, end, 'select');
+  } else {
+    ta.setRangeText(marker + sel + marker, start, end, 'select');
+  }
+  ta.focus();
+}
+
+function injectToolbars() {
+  document.querySelectorAll('.form-row textarea').forEach(ta => {
+    if (ta.parentElement.classList.contains('fmt-wrap')) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'fmt-wrap';
+    ta.parentNode.insertBefore(wrap, ta);
+    const tid = ta.id;
+    const bar = document.createElement('div');
+    bar.className = 'fmt-toolbar';
+    bar.innerHTML = `
+      <button class="fmt-btn bold"   onmousedown="event.preventDefault();fmtWrap('**','${tid}')"  title="Bold"><b>B</b></button>
+      <button class="fmt-btn strike" onmousedown="event.preventDefault();fmtWrap('~~','${tid}')"  title="Strikethrough"><s>S</s></button>
+      <div class="fmt-sep"></div>
+      <button class="fmt-btn"        onmousedown="event.preventDefault();fmtWrap('\`','${tid}')"  title="Inline code" style="font-family:monospace;font-size:12px;">{ }</button>
+    `;
+    wrap.appendChild(bar);
+    wrap.appendChild(ta);
+  });
+}
+
+function showModal(html) {
+  const c = document.getElementById('modal-container');
+  c.innerHTML = `<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`;
+  injectToolbars();
+  const dl = document.getElementById('group-suggestions');
+  if (dl) dl.innerHTML = allGroups().map(g => `<option value="${esc(g)}"></option>`).join('');
+}
+
+function closeModal() {
+  document.getElementById('modal-container').innerHTML = '';
+}
+
+// Keyboard shortcut: Escape to close modal
+document.addEventListener('keydown', e => {
+  if (e.key==='Escape') closeModal();
+});
+
+// ─────────────────────────────────────────────
+// Export / Import
+// ─────────────────────────────────────────────
+function exportData() {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    cases:    state.cases,
+    vocabs:   state.vocabs,
+    formulas: state.formulas,
+    exams:    state.exams,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+  a.href     = url;
+  a.download = `ib-study-backup-${date}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.cases && !data.vocabs && !data.formulas && !data.exams) {
+        throw new Error('Invalid format');
+      }
+      showModal(`
+        <div class="modal-header">
+          <h2>Import Data</h2>
+          <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <p style="font-size:14px;color:var(--text-2);margin-bottom:0.75rem;">
+          The backup file contains:
+        </p>
+        <div style="background:var(--bg);border-radius:var(--radius-md);padding:12px 16px;margin-bottom:1.25rem;display:flex;gap:1.5rem;">
+          <div><span style="font-size:20px;font-weight:500;">${(data.cases||[]).length}</span><br><span style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;">Cases</span></div>
+          <div><span style="font-size:20px;font-weight:500;">${(data.vocabs||[]).length}</span><br><span style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;">Vocab</span></div>
+          <div><span style="font-size:20px;font-weight:500;">${(data.formulas||[]).length}</span><br><span style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;">Formulas</span></div>
+          <div><span style="font-size:20px;font-weight:500;">${(data.exams||[]).length}</span><br><span style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;">Exams</span></div>
+        </div>
+        <p style="font-size:13px;color:var(--text-2);margin-bottom:1.5rem;">How would you like to import?</p>
+        <div class="modal-actions" style="justify-content:flex-start;flex-wrap:wrap;gap:8px;">
+          <button class="btn" onclick="closeModal()">Cancel</button>
+          <button class="btn" onclick="doImport(${JSON.stringify(data).replace(/"/g,'&quot;')}, 'merge')">
+            <i class="ti ti-git-merge"></i> Merge with existing
+          </button>
+          <button class="btn btn-primary" onclick="doImport(${JSON.stringify(data).replace(/"/g,'&quot;')}, 'replace')">
+            <i class="ti ti-replace"></i> Replace all data
+          </button>
+        </div>
+      `);
+    } catch(err) {
+      showModal(`
+        <div class="modal-header">
+          <h2>Import Failed</h2>
+          <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+        </div>
+        <p style="font-size:14px;color:var(--text-2);margin-bottom:1.5rem;">
+          The file could not be read. Make sure it is a valid IB Study Notebook backup (.json).
+        </p>
+        <div class="modal-actions">
+          <button class="btn btn-primary" onclick="closeModal()">OK</button>
+        </div>
+      `);
+    }
+    // reset file input so the same file can be re-imported
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function doImport(data, mode) {
+  if (mode === 'replace') {
+    state.cases    = data.cases    || [];
+    state.vocabs   = data.vocabs   || [];
+    state.formulas = data.formulas || [];
+    state.exams    = data.exams    || [];
+  } else {
+    const existingCaseIds    = new Set(state.cases.map(c => c.id));
+    const existingVocabIds   = new Set(state.vocabs.map(v => v.id));
+    const existingFormulaIds = new Set(state.formulas.map(f => f.id));
+    const existingExamIds    = new Set(state.exams.map(e => e.id));
+    (data.cases    || []).forEach(c => { if (!existingCaseIds.has(c.id))    state.cases.push(c);    });
+    (data.vocabs   || []).forEach(v => { if (!existingVocabIds.has(v.id))   state.vocabs.push(v);   });
+    (data.formulas || []).forEach(f => { if (!existingFormulaIds.has(f.id)) state.formulas.push(f); });
+    (data.exams    || []).forEach(e => { if (!existingExamIds.has(e.id))    state.exams.push(e);    });
+  }
+  migrateExams();
+  migrateGroups();
+  save();
+  closeModal();
+  render();
+}
+
+// ─────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────
+load();
+applySortButton();
+render();
+</script>
+</body>
+</html>
