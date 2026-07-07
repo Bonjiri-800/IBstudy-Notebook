@@ -285,49 +285,6 @@
   }
   .card-date { font-size: 11px; color: var(--text-3); }
   .card-actions { display: flex; gap: 4px; }
-  .card-group {
-    display: inline-flex; align-items: center; gap: 4px;
-    font-size: 10.5px; font-weight: 500; color: var(--accent);
-    background: var(--accent-light); border-radius: 20px;
-    padding: 2px 9px; max-width: 100%;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .card-group i { font-size: 11px; flex-shrink: 0; }
-  .card-groups { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 7px; }
-
-  /* ── Tag input (multi-group chips) ── */
-  .tag-input-box {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-    width: 100%; min-height: 42px;
-    padding: 6px 8px;
-    font-size: 14px; font-family: 'DM Sans', sans-serif;
-    border: 1px solid var(--border); border-radius: var(--radius-md);
-    background: var(--bg); color: var(--text);
-    cursor: text;
-    transition: border-color 0.15s;
-  }
-  .tag-input-box:focus-within { border-color: var(--accent); }
-  .tag-chip {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 12.5px; font-weight: 500;
-    background: var(--accent-light); color: var(--accent);
-    border-radius: 20px; padding: 4px 6px 4px 11px;
-    white-space: nowrap;
-  }
-  .tag-chip button {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 16px; height: 16px; border-radius: 50%;
-    border: none; background: rgba(42,82,160,0.15); color: var(--accent);
-    font-size: 11px; line-height: 1; cursor: pointer; padding: 0;
-    transition: background 0.12s;
-  }
-  .tag-chip button:hover { background: rgba(42,82,160,0.3); }
-  .tag-input-field {
-    flex: 1 1 80px; min-width: 80px;
-    border: none; outline: none; background: transparent;
-    font-size: 14px; font-family: 'DM Sans', sans-serif; color: var(--text);
-    padding: 4px 2px;
-  }
   .icon-btn {
     background: none; border: none; cursor: pointer;
     color: var(--text-3); font-size: 15px;
@@ -491,17 +448,66 @@
   .sidebar-io-btn:hover { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
   .sidebar-io-btn i { font-size: 13px; }
 
+  /* ── Mobile menu toggle + sidebar overlay (hidden on desktop) ── */
+  .menu-toggle {
+    display: none;
+    background: none; border: none; cursor: pointer;
+    font-size: 20px; line-height: 1; color: var(--text);
+    padding: 6px 9px; border-radius: var(--radius-md);
+    margin-right: 2px; flex-shrink: 0;
+  }
+  .menu-toggle:hover { background: var(--bg); }
+
+  .sidebar-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(17, 19, 24, 0.45);
+    z-index: 15;
+  }
+  .sidebar-overlay.show { display: block; }
+
   /* ── Responsive ── */
   @media (max-width: 700px) {
-    .sidebar { width: 0; overflow: hidden; }
+    .menu-toggle { display: inline-flex; align-items: center; justify-content: center; }
+
+    /* Sidebar becomes an off-canvas drawer instead of disappearing with no way back */
+    .sidebar {
+      width: 260px; min-width: 260px;
+      transform: translateX(-100%);
+      transition: transform 0.22s ease;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+      z-index: 20;
+    }
+    .sidebar.open { transform: translateX(0); }
+
     .main { margin-left: 0; }
-    .topbar { padding: 0.75rem 1rem; }
+    .topbar { padding: 0.75rem 1rem; flex-wrap: wrap; row-gap: 8px; }
+    .topbar h1 { font-size: 15px; }
+    .search-wrap { order: 3; flex: 1 1 100%; max-width: none; }
     .content { padding: 1.25rem 1rem; }
+
+    .cards-grid, .vocab-grid, .formula-grid { grid-template-columns: 1fr; }
+
+    .modal { padding: 1.25rem; }
+    .flash-wrap { margin: 1.5rem auto; }
+    .flash-card { padding: 1.75rem 1.25rem; }
+    .flash-term { font-size: 21px; }
+
+    /* iOS Safari zooms the page in when a focused input's font-size is under 16px */
+    .search-input, .form-row input, .form-row textarea, .form-row select { font-size: 16px; }
+  }
+
+  @media (max-width: 420px) {
+    #sort-label, #add-label { display: none; }   /* keep icons, drop labels to fit one row */
+    .btn { padding: 8px 11px; }
   }
 </style>
 </head>
 <body>
 <div class="layout">
+
+  <!-- Mobile sidebar backdrop -->
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
   <!-- Sidebar -->
   <nav class="sidebar" id="sidebar">
@@ -593,20 +599,18 @@
   <!-- Main -->
   <div class="main">
     <header class="topbar">
+      <button class="menu-toggle" id="menuToggle" onclick="toggleSidebar()" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar">☰</button>
       <h1 id="topbar-title">Case Studies</h1>
       <div class="search-wrap">
         <i class="ti ti-search"></i>
         <input type="text" class="search-input" id="search-input" placeholder="Search..." oninput="render()" />
       </div>
-      <select class="btn" id="group-filter" onchange="render()" title="Filter by group" style="padding:8px 10px;">
-        <option value="">All Groups</option>
-      </select>
       <button class="btn" id="sort-btn" onclick="toggleSort()" title="Sort order">
         <i class="ti ti-arrows-move" id="sort-icon"></i>
         <span id="sort-label">Manual</span>
       </button>
       <button class="btn btn-primary" id="add-btn" onclick="openAdd()">
-        <i class="ti ti-plus"></i> Add
+        <i class="ti ti-plus"></i> <span id="add-label">Add</span>
       </button>
     </header>
 
@@ -616,7 +620,6 @@
 
 <!-- Modal container -->
 <div id="modal-container"></div>
-<datalist id="group-suggestions"></datalist>
 
 <script>
 // ─────────────────────────────────────────────
@@ -641,23 +644,6 @@ function load() {
   try { state.formulas = JSON.parse(localStorage.getItem('ib_formulas') || '[]'); } catch(e) { state.formulas = []; }
   try { state.exams    = JSON.parse(localStorage.getItem('ib_exams')    || '[]'); } catch(e) { state.exams    = []; }
   migrateExams();
-  migrateGroups();
-}
-
-// One-time migration: the single-value "group" field was upgraded to a
-// "groups" array so each item can carry multiple tags. Convert any legacy
-// string value into a one-element array (or empty array if absent) so
-// existing data keeps working with the new multi-tag UI.
-function migrateGroups() {
-  let changed = false;
-  [...state.cases, ...state.vocabs, ...state.formulas, ...state.exams].forEach(item => {
-    if (!Array.isArray(item.groups)) {
-      item.groups = (typeof item.group === 'string' && item.group.trim()) ? [item.group.trim()] : [];
-      changed = true;
-    }
-    if ('group' in item) { delete item.group; changed = true; }
-  });
-  if (changed) save();
 }
 
 // One-time migration: merge any legacy "notes" field into "criteria"
@@ -749,6 +735,7 @@ function setTab(t) {
   const titles = { case:'Case Studies', vocab:'Vocabulary', formula:'Formulas', exam:'Exam & Criteria' };
   document.getElementById('topbar-title').textContent = titles[t];
   render();
+  closeSidebar();
 }
 
 function setSubject(s) {
@@ -757,128 +744,41 @@ function setSubject(s) {
     document.getElementById('subj-'+k).classList.toggle('active', k===s);
   });
   render();
+  closeSidebar();
 }
+
+// ─────────────────────────────────────────────
+// Mobile sidebar drawer
+// ─────────────────────────────────────────────
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebarOverlay').classList.add('show');
+  document.getElementById('menuToggle').setAttribute('aria-expanded', 'true');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
+  document.getElementById('menuToggle').setAttribute('aria-expanded', 'false');
+}
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.contains('open') ? closeSidebar() : openSidebar();
+}
+// If the viewport is resized past the mobile breakpoint while the drawer is open, reset it
+window.addEventListener('resize', () => { if (window.innerWidth > 700) closeSidebar(); });
 
 // ─────────────────────────────────────────────
 // Render
 // ─────────────────────────────────────────────
-// ─────────────────────────────────────────────
-// Groups (tag-like grouping across all content types)
-// ─────────────────────────────────────────────
-// "groups" is an array of free-text labels the user assigns when adding/
-// editing any item (Case, Vocab, Formula, Exam). Multiple items sharing a
-// group name belong to that group, and the group filter dropdown lets the
-// user quickly narrow the current tab down to just that group.
-// Render a row of small group-tag chips for card grids and detail modals.
-function groupChipsHTML(groups, variant) {
-  if (!groups || !groups.length) return '';
-  if (variant === 'detail') {
-    return groups.map(g =>
-      `<span class="detail-sub-badge" style="background:var(--accent-light);color:var(--accent);"><i class="ti ti-tag"></i> ${esc(g)}</span>`
-    ).join('');
-  }
-  return `<div class="card-groups">${groups.map(g =>
-    `<span class="card-group"><i class="ti ti-tag"></i>${esc(g)}</span>`
-  ).join('')}</div>`;
-}
-
-function allGroups() {
-  const s = new Set();
-  [...state.cases, ...state.vocabs, ...state.formulas, ...state.exams].forEach(item => {
-    (item.groups||[]).forEach(g => { if (g && g.trim()) s.add(g.trim()); });
-  });
-  return [...s].sort((a, b) => a.localeCompare(b, 'ja'));
-}
-
-function refreshGroupFilter() {
-  const sel = document.getElementById('group-filter');
-  if (!sel) return;
-  const current = sel.value;
-  const groups = allGroups();
-  sel.innerHTML = `<option value="">All Groups</option>` +
-    groups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
-  // Keep the previous selection if it still exists, otherwise reset to "All".
-  sel.value = groups.includes(current) ? current : '';
-}
-
 function getFiltered(list, isCase) {
   const q = (document.getElementById('search-input')?.value||'').toLowerCase().trim();
-  const g = (document.getElementById('group-filter')?.value||'').trim();
   return list.filter(item => {
     if (state.subject !== 'all' && item.subject !== state.subject) return false;
-    if (g && !(item.groups||[]).includes(g)) return false;
     if (!q) return true;
     const text = isCase
-      ? [item.title, item.content, item.keyPoints, ...(item.groups||[])].join(' ').toLowerCase()
-      : [item.term, item.definition, item.example, ...(item.groups||[])].join(' ').toLowerCase();
+      ? [item.title, item.content, item.keyPoints].join(' ').toLowerCase()
+      : [item.term, item.definition, item.example].join(' ').toLowerCase();
     return text.includes(q);
   });
-}
-
-// ── Tag-input widget ───────────────────────────────────────
-// Renders a wide chip-style box where the user types a group name and
-// presses Enter/Comma to add it as a tag. Backspace on an empty field
-// removes the last tag. State is tracked in-memory per open form via a
-// data attribute on the box, and read back out at save time.
-function renderTagChips(boxId, tags) {
-  const box = document.getElementById(boxId);
-  if (!box) return;
-  const field = box.querySelector('.tag-input-field');
-  box.querySelectorAll('.tag-chip').forEach(el => el.remove());
-  tags.forEach((tag, idx) => {
-    const chip = document.createElement('span');
-    chip.className = 'tag-chip';
-    chip.innerHTML = `<span></span><button type="button" aria-label="Remove">✕</button>`;
-    chip.querySelector('span').textContent = tag;
-    chip.querySelector('button').addEventListener('click', () => {
-      tags.splice(idx, 1);
-      renderTagChips(boxId, tags);
-      field.focus();
-    });
-    box.insertBefore(chip, field);
-  });
-}
-
-function initTagInput(boxId, initialTags) {
-  const tags = [...(initialTags||[])];
-  const box = document.getElementById(boxId);
-  if (!box) return tags;
-  const field = box.querySelector('.tag-input-field');
-
-  function addFromField() {
-    const v = field.value.trim();
-    if (v && !tags.includes(v)) { tags.push(v); }
-    field.value = '';
-    renderTagChips(boxId, tags);
-  }
-
-  field.addEventListener('keydown', ev => {
-    if (ev.key === 'Enter' || ev.key === ',') {
-      ev.preventDefault();
-      addFromField();
-    } else if (ev.key === 'Backspace' && !field.value && tags.length) {
-      tags.pop();
-      renderTagChips(boxId, tags);
-    }
-  });
-  field.addEventListener('blur', addFromField);
-  box.addEventListener('click', () => field.focus());
-
-  renderTagChips(boxId, tags);
-  return tags;
-}
-
-// Read out the current tags from a tag-input box at save time, including
-// any text still sitting in the input field that the user didn't press
-// Enter/Comma on (so a forgotten last tag isn't silently dropped).
-function readTagBox(boxId) {
-  const box = document.getElementById(boxId);
-  if (!box) return [];
-  const tags = [...box.querySelectorAll('.tag-chip > span')].map(el => el.textContent);
-  const field = box.querySelector('.tag-input-field');
-  const pending = field ? field.value.trim() : '';
-  if (pending && !tags.includes(pending)) tags.push(pending);
-  return tags;
 }
 
 // ─────────────────────────────────────────────
@@ -939,7 +839,6 @@ const DRAG_HINT = `<div class="drag-hint"><i class="ti ti-arrows-move"></i> Drag
 function render() {
   destroySortable();
   updateStats();
-  refreshGroupFilter();
   const t = state.tab;
   if      (t==='case')    renderCases();
   else if (t==='vocab')   renderVocabs();
@@ -975,7 +874,6 @@ function renderCases() {
       <div class="card" data-id="${c.id}" onclick="openCaseDetail('${c.id}')">
         <div class="card-stripe ${c.subject}"></div>
         <div class="card-sub ${c.subject}">${SUBJECT_NAMES[c.subject]||c.subject}</div>
-        ${groupChipsHTML(c.groups)}
         <div class="card-title">${esc(c.title)}</div>
         <div class="card-preview">${esc(stripMd(c.content))}</div>
         <div class="card-footer">
@@ -1006,7 +904,6 @@ function renderVocabs() {
       <div class="card" data-id="${v.id}" onclick="openVocabDetail('${v.id}')">
         <div class="card-stripe ${v.subject}"></div>
         <div class="card-sub ${v.subject}">${SUBJECT_NAMES[v.subject]||v.subject}</div>
-        ${groupChipsHTML(v.groups)}
         <div class="vocab-term">${esc(v.term)}</div>
         <div class="vocab-def">${esc(stripMd(v.definition))}</div>
         ${v.example ? `<div class="vocab-ex">${esc(stripMd(v.example))}</div>` : ''}
@@ -1134,19 +1031,12 @@ function openAddCase(prefill={}) {
       <label>Key Points / Keywords (comma-separated)</label>
       <input type="text" id="f-keys" value="${esc(prefill.keyPoints||'')}" placeholder="e.g. PED, market structure, monopoly" />
     </div>
-    <div class="form-row">
-      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
-      <div class="tag-input-box" id="f-group-box">
-        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
-      </div>
-    </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveCase('${prefill.id||''}')">Save</button>
     </div>
   `);
   document.getElementById('f-title').focus();
-  initTagInput('f-group-box', prefill.groups);
 }
 
 function saveCase(editId) {
@@ -1158,7 +1048,6 @@ function saveCase(editId) {
     title,
     content:   document.getElementById('f-content').value.trim(),
     keyPoints: document.getElementById('f-keys').value.trim(),
-    groups:    readTagBox('f-group-box'),
     date:      editId ? (state.cases.find(c=>c.id===editId)||{}).date||today() : today(),
   };
   if (editId) { const i=state.cases.findIndex(c=>c.id===editId); if(i>-1) state.cases[i]=item; }
@@ -1221,19 +1110,12 @@ function openAddVocab(prefill={}) {
       <label>Example / Usage (optional)</label>
       <input type="text" id="f-ex" value="${esc(prefill.example||'')}" placeholder="e.g. The PED of luxury goods is typically greater than 1." />
     </div>
-    <div class="form-row">
-      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
-      <div class="tag-input-box" id="f-group-box">
-        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
-      </div>
-    </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveVocab('${prefill.id||''}')">Save</button>
     </div>
   `);
   document.getElementById('f-term').focus();
-  initTagInput('f-group-box', prefill.groups);
 }
 
 function saveVocab(editId) {
@@ -1245,7 +1127,6 @@ function saveVocab(editId) {
     term,
     definition: document.getElementById('f-def').value.trim(),
     example:    document.getElementById('f-ex').value.trim(),
-    groups:    readTagBox('f-group-box'),
     date:       editId ? (state.vocabs.find(v=>v.id===editId)||{}).date||today() : today(),
   };
   if (editId) { const i=state.vocabs.findIndex(v=>v.id===editId); if(i>-1) state.vocabs[i]=item; }
@@ -1277,7 +1158,6 @@ function openCaseDetail(id) {
       <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
     </div>
     <span class="detail-sub-badge">${SUBJECT_NAMES[c.subject]||c.subject}</span>
-    ${groupChipsHTML(c.groups, 'detail')}
     <div class="detail-title">${esc(c.title)}</div>
     ${c.content ? `<div class="detail-section"><div class="detail-label">Content &amp; Analysis</div><div class="detail-body">${md(c.content)}</div></div>` : ''}
     ${keys.length ? `<div class="detail-section"><div class="detail-label">Key Points</div><div class="keypills">${keys.map(k=>`<span class="keypill">${esc(k)}</span>`).join('')}</div></div>` : ''}
@@ -1301,7 +1181,6 @@ function openVocabDetail(id) {
       <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
     </div>
     <span class="detail-sub-badge">${SUBJECT_NAMES[v.subject]||v.subject}</span>
-    ${groupChipsHTML(v.groups, 'detail')}
     <div class="detail-title">${esc(v.term)}</div>
     ${v.definition ? `<div class="detail-section"><div class="detail-label">Definition</div><div class="detail-body">${md(v.definition)}</div></div>` : ''}
     ${v.example ? `<div class="detail-section"><div class="detail-label">Example / Usage</div><div class="detail-body">${md(v.example)}</div></div>` : ''}
@@ -1323,12 +1202,10 @@ function openVocabDetail(id) {
 function renderFormulas() {
   const el = document.getElementById('main-content');
   const q  = (document.getElementById('search-input')?.value||'').toLowerCase().trim();
-  const g  = (document.getElementById('group-filter')?.value||'').trim();
   const items = getSorted(state.formulas.filter(f => {
     if (state.subject !== 'all' && f.subject !== state.subject) return false;
-    if (g && !(f.groups||[]).includes(g)) return false;
     if (!q) return true;
-    return [f.name, f.expression, f.description, f.units, ...(f.groups||[])].join(' ').toLowerCase().includes(q);
+    return [f.name, f.expression, f.description, f.units].join(' ').toLowerCase().includes(q);
   }));
 
   if (!state.formulas.length) {
@@ -1341,7 +1218,6 @@ function renderFormulas() {
       <div class="card" data-id="${f.id}" onclick="openFormulaDetail('${f.id}')">
         <div class="card-stripe ${f.subject}"></div>
         <div class="card-sub ${f.subject}">${SUBJECT_NAMES[f.subject]||f.subject}</div>
-        ${groupChipsHTML(f.groups)}
         <div class="formula-name">${esc(f.name)}</div>
         <div class="formula-expr">${esc(f.expression)}</div>
         ${f.description ? `<div class="formula-desc">${esc(stripMd(f.description))}</div>` : ''}
@@ -1391,19 +1267,12 @@ function openAddFormula(prefill={}) {
       <label>Description / Variables (optional)</label>
       <textarea id="f-desc" style="min-height:90px;" placeholder="Explain each variable, when to use this formula, derivation notes...">${esc(prefill.description||'')}</textarea>
     </div>
-    <div class="form-row">
-      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
-      <div class="tag-input-box" id="f-group-box">
-        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
-      </div>
-    </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveFormula('${prefill.id||''}')">Save</button>
     </div>
   `);
   document.getElementById('f-name').focus();
-  initTagInput('f-group-box', prefill.groups);
 }
 
 function saveFormula(editId) {
@@ -1418,7 +1287,6 @@ function saveFormula(editId) {
     expression,
     units:       document.getElementById('f-units').value.trim(),
     description: document.getElementById('f-desc').value.trim(),
-    groups:    readTagBox('f-group-box'),
     date:        editId ? (state.formulas.find(f=>f.id===editId)||{}).date||today() : today(),
   };
   if (editId) { const i = state.formulas.findIndex(f=>f.id===editId); if(i>-1) state.formulas[i]=item; }
@@ -1446,7 +1314,6 @@ function openFormulaDetail(id) {
       <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
     </div>
     <span class="detail-sub-badge">${SUBJECT_NAMES[f.subject]||f.subject}</span>
-    ${groupChipsHTML(f.groups, 'detail')}
     <div class="detail-title">${esc(f.name)}</div>
     <div class="detail-formula-expr">${esc(f.expression)}</div>
     ${f.units ? `<div class="detail-section"><div class="detail-label">Units</div><div class="detail-body">${esc(f.units)}</div></div>` : ''}
@@ -1469,12 +1336,10 @@ function openFormulaDetail(id) {
 function renderExams() {
   const el = document.getElementById('main-content');
   const q  = (document.getElementById('search-input')?.value||'').toLowerCase().trim();
-  const g  = (document.getElementById('group-filter')?.value||'').trim();
   const items = getSorted(state.exams.filter(e => {
     if (state.subject !== 'all' && e.subject !== state.subject) return false;
-    if (g && !(e.groups||[]).includes(g)) return false;
     if (!q) return true;
-    return [e.title, e.type, e.criteria, ...(e.groups||[])].join(' ').toLowerCase().includes(q);
+    return [e.title, e.type, e.criteria].join(' ').toLowerCase().includes(q);
   }));
 
   if (!state.exams.length) {
@@ -1493,7 +1358,6 @@ function renderExams() {
             <span style="font-size:10px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:${tc};background:${tc}18;padding:2px 8px;border-radius:20px;">${esc(e.type)}</span>
             <span class="card-sub ${e.subject}" style="margin:0;">${SUBJECT_NAMES[e.subject]||e.subject}</span>
           </div>
-          ${groupChipsHTML(e.groups)}
           <div class="card-title">${esc(e.title)}</div>
           ${e.criteria ? `<div class="card-preview">${esc(stripMd(e.criteria))}</div>` : ''}
           <div class="card-footer">
@@ -1539,19 +1403,12 @@ function openAddExam(prefill={}) {
       <label>Marking Criteria and Note</label>
       <textarea id="f-criteria" style="min-height:150px;" placeholder="Enter each criterion, marks awarded, and key points, together with prep notes, strategy, and time-management tips...">${esc(prefill.criteria||'')}</textarea>
     </div>
-    <div class="form-row">
-      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
-      <div class="tag-input-box" id="f-group-box">
-        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
-      </div>
-    </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveExam('${prefill.id||''}')">Save</button>
     </div>
   `);
   document.getElementById('f-title').focus();
-  initTagInput('f-group-box', prefill.groups);
 }
 
 function saveExam(editId) {
@@ -1563,7 +1420,6 @@ function saveExam(editId) {
     type:     document.getElementById('f-type').value,
     title,
     criteria: document.getElementById('f-criteria').value.trim(),
-    groups:    readTagBox('f-group-box'),
     date:     editId ? (state.exams.find(e=>e.id===editId)||{}).date||today() : today(),
   };
   if (editId) { const i=state.exams.findIndex(e=>e.id===editId); if(i>-1) state.exams[i]=item; }
@@ -1593,7 +1449,6 @@ function openExamDetail(id) {
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:0.6rem;">
       <span class="detail-sub-badge">${SUBJECT_NAMES[e.subject]||e.subject}</span>
       <span class="detail-sub-badge" style="background:var(--accent-light);color:var(--accent);">${esc(e.type)}</span>
-      ${groupChipsHTML(e.groups, 'detail')}
     </div>
     <div class="detail-title">${esc(e.title)}</div>
     ${e.criteria ? `<div class="detail-section"><div class="detail-label">Marking Criteria and Note</div><div class="detail-body">${md(e.criteria)}</div></div>` : ''}
@@ -1652,8 +1507,6 @@ function showModal(html) {
   const c = document.getElementById('modal-container');
   c.innerHTML = `<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`;
   injectToolbars();
-  const dl = document.getElementById('group-suggestions');
-  if (dl) dl.innerHTML = allGroups().map(g => `<option value="${esc(g)}"></option>`).join('');
 }
 
 function closeModal() {
@@ -1759,7 +1612,6 @@ function doImport(data, mode) {
     (data.exams    || []).forEach(e => { if (!existingExamIds.has(e.id))    state.exams.push(e);    });
   }
   migrateExams();
-  migrateGroups();
   save();
   closeModal();
   render();
