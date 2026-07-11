@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
 <title>IB Study Notebook</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
@@ -47,6 +47,8 @@
     min-height: 100vh;
     line-height: 1.6;
   }
+
+  .hidden { display: none !important; }
 
   /* ── Layout ── */
   .layout { display: flex; min-height: 100vh; }
@@ -140,6 +142,20 @@
     padding: 0.75rem 1rem;
     border-top: 1px solid var(--sidebar-border);
   }
+  .sidebar-account {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; margin-bottom: 10px;
+  }
+  .sidebar-account-email {
+    font-size: 11.5px; color: var(--text-3);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .sidebar-account button {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-3); font-size: 15px; padding: 3px 5px; border-radius: 5px;
+    flex-shrink: 0; transition: all 0.12s;
+  }
+  .sidebar-account button:hover { background: rgba(192,57,43,0.08); color: #c0392b; }
   .stats-mini { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
   .stat-mini { text-align: center; background: var(--bg); border-radius: 6px; padding: 5px 2px; }
   .stat-mini-num { font-size: 15px; font-weight: 500; color: var(--text); line-height: 1; }
@@ -197,8 +213,11 @@
     white-space: nowrap;
   }
   .btn:hover { background: var(--bg); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn:disabled:hover { background: var(--card); }
   .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   .btn-primary:hover { background: #1e3d80; border-color: #1e3d80; }
+  .btn-primary:disabled:hover { background: var(--accent); border-color: var(--accent); }
   .btn-danger { color: #c0392b; border-color: rgba(192,57,43,0.25); background: rgba(192,57,43,0.04); }
   .btn-danger:hover { background: rgba(192,57,43,0.1); }
 
@@ -466,6 +485,20 @@
   }
   .sidebar-overlay.show { display: block; }
 
+  /* ── Auth screen ── */
+  #authOverlay { z-index: 300; }
+  #authStatus { font-size: 12.5px; color: var(--text-3); margin-bottom: 1rem; }
+  #authError { font-size: 12.5px; color: #c0392b; background: rgba(192,57,43,0.08); padding: 9px 12px; border-radius: var(--radius-md); margin-bottom: 1rem; line-height: 1.5; }
+
+  /* ── Sync status banner ── */
+  #syncErrorBanner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 400;
+    background: rgba(192,57,43,0.95); color: #fff;
+    padding: 10px 20px; font-size: 13px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  #syncErrorBanner button { background: none; border: none; color: #fff; text-decoration: underline; cursor: pointer; font-size: 12.5px; font-family: 'DM Sans', sans-serif; flex-shrink: 0; }
+
   /* ── Responsive ── */
   @media (max-width: 700px) {
     .menu-toggle { display: inline-flex; align-items: center; justify-content: center; }
@@ -504,7 +537,45 @@
 </style>
 </head>
 <body>
-<div class="layout">
+
+<!-- ══════════════ Auth screen (shown until logged in) ══════════════ -->
+<div class="modal-overlay" id="authOverlay">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header">
+      <h2>IB Study Notebook</h2>
+    </div>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:1.25rem;">Sign in to sync your notes across devices.</p>
+
+    <div class="form-row">
+      <label>Email</label>
+      <input type="email" id="authEmail" placeholder="you@example.com" autocomplete="username" />
+    </div>
+    <div class="form-row" style="margin-bottom:0.9rem;">
+      <label>Password</label>
+      <input type="password" id="authPassword" placeholder="6+ characters" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')handleLogin()" />
+    </div>
+
+    <div id="authError" class="hidden"></div>
+    <div id="authStatus">Connecting…</div>
+
+    <div class="modal-actions" style="justify-content:stretch;">
+      <button class="btn" style="flex:1;justify-content:center;" id="authSignupBtn" onclick="handleSignup()" disabled>Sign Up</button>
+      <button class="btn btn-primary" style="flex:1;justify-content:center;" id="authLoginBtn" onclick="handleLogin()" disabled>Log In</button>
+    </div>
+    <div style="text-align:center;margin-top:1rem;">
+      <button onclick="handleForgotPassword()" style="background:none;border:none;color:var(--accent);text-decoration:underline;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">Forgot password?</button>
+    </div>
+  </div>
+</div>
+
+<!-- Persistent data-sync error banner (stays until dismissed, unlike a toast) -->
+<div id="syncErrorBanner" class="hidden">
+  <span id="syncErrorText"></span>
+  <button onclick="document.getElementById('syncErrorBanner').classList.add('hidden')">Dismiss</button>
+</div>
+
+<div class="layout hidden" id="appLayout">
 
   <!-- Mobile sidebar backdrop -->
   <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
@@ -566,6 +637,10 @@
     </button>
 
     <div class="sidebar-bottom">
+      <div class="sidebar-account">
+        <span class="sidebar-account-email" id="userEmail"></span>
+        <button onclick="handleLogout()" title="Log out"><i class="ti ti-logout"></i></button>
+      </div>
       <div class="stats-mini">
         <div class="stat-mini">
           <div class="stat-mini-num" id="stat-cases">0</div>
@@ -638,12 +713,17 @@ let state = {
   exams:    [],
 };
 
-function load() {
-  try { state.cases    = JSON.parse(localStorage.getItem('ib_cases')    || '[]'); } catch(e) { state.cases    = []; }
-  try { state.vocabs   = JSON.parse(localStorage.getItem('ib_vocabs')   || '[]'); } catch(e) { state.vocabs   = []; }
-  try { state.formulas = JSON.parse(localStorage.getItem('ib_formulas') || '[]'); } catch(e) { state.formulas = []; }
-  try { state.exams    = JSON.parse(localStorage.getItem('ib_exams')    || '[]'); } catch(e) { state.exams    = []; }
+// Data now lives in Firestore (see the Firebase block below), keyed by
+// account, so it follows you across devices. `applyCloudData()` populates
+// `state` after login and on every remote change; `save()` pushes local
+// edits back up.
+function applyCloudData(data) {
+  state.cases    = data.cases    || [];
+  state.vocabs   = data.vocabs   || [];
+  state.formulas = data.formulas || [];
+  state.exams    = data.exams    || [];
   migrateExams();
+  render();
 }
 
 // One-time migration: merge any legacy "notes" field into "criteria"
@@ -666,10 +746,7 @@ function migrateExams() {
 }
 
 function save() {
-  localStorage.setItem('ib_cases',    JSON.stringify(state.cases));
-  localStorage.setItem('ib_vocabs',   JSON.stringify(state.vocabs));
-  localStorage.setItem('ib_formulas', JSON.stringify(state.formulas));
-  localStorage.setItem('ib_exams',    JSON.stringify(state.exams));
+  persistToCloud();
 }
 
 function esc(s) {
@@ -703,8 +780,8 @@ function uid()   { return Date.now() + Math.random().toString(36).slice(2,6); }
 // ─────────────────────────────────────────────
 const SORT_BTN = {
   manual: ['ti ti-arrows-move',     'Manual'],
-  asc:    ['ti ti-sort-ascending',  '昇順'],
-  desc:   ['ti ti-sort-descending', '降順'],
+  asc:    ['ti ti-sort-ascending',  'Ascending'],
+  desc:   ['ti ti-sort-descending', 'Descending'],
 };
 
 function applySortButton() {
@@ -722,8 +799,8 @@ function toggleSort() {
 
 function getSorted(list) {
   // Manual : drag to set the order (the saved array order).
-  // 昇順 asc : view that manual order from the front (same direction, view-only).
-  // 降順 desc: view that manual order from the back (reversed, view-only).
+  // Ascending  : view that manual order from the front (same direction, view-only).
+  // Descending : view that manual order from the back (reversed, view-only).
   return state.sort === 'desc' ? [...list].reverse() : [...list];
 }
 
@@ -1513,7 +1590,8 @@ function closeModal() {
   document.getElementById('modal-container').innerHTML = '';
 }
 
-// Keyboard shortcut: Escape to close modal
+// Keyboard shortcut: Escape to close modal (only closes in-app modals — the
+// auth screen isn't in #modal-container, so this can't be used to skip login)
 document.addEventListener('keydown', e => {
   if (e.key==='Escape') closeModal();
 });
@@ -1618,11 +1696,240 @@ function doImport(data, mode) {
 }
 
 // ─────────────────────────────────────────────
-// Init
+// Init (data itself now loads after login — see the Firebase block below)
 // ─────────────────────────────────────────────
-load();
 applySortButton();
-render();
+</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     Firebase: Authentication + Firestore sync
+     ══════════════════════════════════════════════════════════ -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getAnalytics, isSupported as analyticsIsSupported } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-analytics.js";
+  import {
+    getAuth,
+    onAuthStateChanged,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut,
+    sendPasswordResetEmail
+  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    onSnapshot,
+    serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+  // Values like apiKey are meant to be public and are safe to embed directly
+  // in the HTML — actual access control happens in Firestore Security Rules.
+  const firebaseConfig = {
+    apiKey: "AIzaSyAI1RdaXEBfxHUOmJtEpELN5uVWZdNKXeA",
+    authDomain: "ibstudy-notebook.firebaseapp.com",
+    projectId: "ibstudy-notebook",
+    storageBucket: "ibstudy-notebook.firebasestorage.app",
+    messagingSenderId: "546390368913",
+    appId: "1:546390368913:web:18e083125a9f156ff35530",
+    measurementId: "G-PSXLFPFQ2Z"
+  };
+
+  const app  = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db   = getFirestore(app);
+
+  // Analytics is optional and unrelated to login/sync — guarded so a blocked
+  // or unsupported environment (ad blockers, some in-app browsers) can never
+  // break authentication.
+  analyticsIsSupported().then(ok => { if (ok) { try { getAnalytics(app); } catch(e) {} } }).catch(()=>{});
+
+  let currentUID = null;
+  let unsubscribeSnapshot = null;
+  let suppressNextSnapshotRender = false;
+
+  const AUTH_ERROR_MESSAGES = {
+    'auth/invalid-email':        'That email address doesn\'t look valid.',
+    'auth/user-not-found':       'No account found for that email. Try "Sign Up" instead.',
+    'auth/wrong-password':       'Incorrect password.',
+    'auth/invalid-credential':   'Incorrect email or password.',
+    'auth/email-already-in-use': 'That email is already registered. Try "Log In" instead.',
+    'auth/weak-password':        'Password must be at least 6 characters.',
+    'auth/too-many-requests':    'Too many attempts. Please try again later.',
+  };
+
+  const authStatusEl = document.getElementById('authStatus');
+  const authErrorEl  = document.getElementById('authError');
+  const loginBtnEl   = document.getElementById('authLoginBtn');
+  const signupBtnEl  = document.getElementById('authSignupBtn');
+
+  function showAuthError(err) {
+    authErrorEl.textContent = AUTH_ERROR_MESSAGES[err.code] || `Error: ${err.message}`;
+    authErrorEl.classList.remove('hidden');
+  }
+  function clearAuthError() { authErrorEl.classList.add('hidden'); }
+  function setAuthBusy(busy) { loginBtnEl.disabled = busy; signupBtnEl.disabled = busy; }
+
+  // Buttons start disabled (see HTML) so a slow or failed load never looks
+  // like an unresponsive tap.
+  function markReady() {
+    authStatusEl.classList.add('hidden');
+    loginBtnEl.disabled = false;
+    signupBtnEl.disabled = false;
+  }
+  function markFailed(message) {
+    authStatusEl.classList.add('hidden');
+    authErrorEl.textContent = message;
+    authErrorEl.classList.remove('hidden');
+    loginBtnEl.disabled = true;
+    signupBtnEl.disabled = true;
+  }
+
+  // Persistent banner for Firestore (data sync) problems — stays on screen
+  // until dismissed, unlike a toast, so the exact error text is readable.
+  function showSyncError(message) {
+    document.getElementById('syncErrorText').textContent = 'Sync error: ' + message;
+    document.getElementById('syncErrorBanner').classList.remove('hidden');
+  }
+  function clearSyncError() {
+    document.getElementById('syncErrorBanner').classList.add('hidden');
+  }
+
+  const readinessTimeout = setTimeout(() => {
+    markFailed('Could not connect to the login service. Check your internet connection and reload the page.');
+  }, 8000);
+
+  window.addEventListener('error', (e) => {
+    markFailed('A script failed to load (' + (e.message || 'unknown error') + '). Try reloading the page.');
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    markFailed('Something went wrong (' + (e.reason?.message || e.reason || 'unknown error') + '). Try reloading the page.');
+  });
+
+  window.handleLogin = async function() {
+    clearAuthError();
+    const email = document.getElementById('authEmail').value.trim();
+    const pass  = document.getElementById('authPassword').value;
+    if (!email || !pass) { showAuthError({code:'', message:'Please enter your email and password.'}); return; }
+    setAuthBusy(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+      // onAuthStateChanged handles the screen switch from here
+    } catch (err) {
+      showAuthError(err);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  window.handleSignup = async function() {
+    clearAuthError();
+    const email = document.getElementById('authEmail').value.trim();
+    const pass  = document.getElementById('authPassword').value;
+    if (!email || !pass) { showAuthError({code:'', message:'Please enter your email and password.'}); return; }
+    setAuthBusy(true);
+    try {
+      await createUserWithEmailAndPassword(auth, email, pass);
+    } catch (err) {
+      showAuthError(err);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  window.handleForgotPassword = async function() {
+    clearAuthError();
+    const email = document.getElementById('authEmail').value.trim();
+    if (!email) { showAuthError({code:'', message:'Please enter your email first.'}); return; }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      alert('Password reset email sent.');
+    } catch (err) {
+      showAuthError(err);
+    }
+  };
+
+  window.handleLogout = async function() {
+    await signOut(auth);
+  };
+
+  // Writes to Firestore — called from the app's own save() function.
+  window.persistToCloud = async function() {
+    if (!currentUID) return;
+    suppressNextSnapshotRender = true; // avoid a flicker from re-rendering our own write
+    try {
+      await setDoc(doc(db, 'users', currentUID), {
+        cases: state.cases,
+        vocabs: state.vocabs,
+        formulas: state.formulas,
+        exams: state.exams,
+        updatedAt: serverTimestamp()
+      });
+      clearSyncError();
+    } catch (err) {
+      showSyncError(err.message + (err.code ? ' (' + err.code + ')' : ''));
+    }
+  };
+
+  async function startSessionFor(user) {
+    currentUID = user.uid;
+
+    document.getElementById('authOverlay').classList.add('hidden');
+    document.getElementById('appLayout').classList.remove('hidden');
+    document.getElementById('userEmail').textContent = user.email;
+
+    const ref = doc(db, 'users', currentUID);
+
+    // Initial load, wrapped in try/catch: an error here (Firestore database
+    // not created yet, or security rules denying access) used to fail
+    // silently — the app would just show up empty with no explanation.
+    try {
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        applyCloudData(snap.data());
+      } else {
+        // First login: create an empty document
+        await setDoc(ref, { cases:[], vocabs:[], formulas:[], exams:[], updatedAt: serverTimestamp() });
+        applyCloudData({});
+      }
+      clearSyncError();
+    } catch (err) {
+      showSyncError(err.message + (err.code ? ' (' + err.code + ')' : ''));
+      return; // don't attach a listener on top of a broken initial load
+    }
+
+    // Reflect changes from other devices in real time. The third argument is
+    // an error callback — without it, a permission/connection problem here
+    // would also fail completely silently.
+    unsubscribeSnapshot = onSnapshot(ref, (docSnap) => {
+      if (suppressNextSnapshotRender) { suppressNextSnapshotRender = false; return; }
+      if (docSnap.exists()) applyCloudData(docSnap.data());
+      clearSyncError();
+    }, (err) => {
+      showSyncError(err.message + (err.code ? ' (' + err.code + ')' : ''));
+    });
+  }
+
+  function endSession() {
+    currentUID = null;
+    if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    state.cases = []; state.vocabs = []; state.formulas = []; state.exams = [];
+
+    document.getElementById('appLayout').classList.add('hidden');
+    document.getElementById('authEmail').value = '';
+    document.getElementById('authPassword').value = '';
+    clearAuthError();
+    clearSyncError();
+    document.getElementById('authOverlay').classList.remove('hidden');
+  }
+
+  onAuthStateChanged(auth, (user) => {
+    clearTimeout(readinessTimeout);
+    markReady();
+    if (user) startSessionFor(user);
+    else endSession();
+  });
 </script>
 </body>
 </html>
