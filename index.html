@@ -2,12 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>IB Study Notebook</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/tabler-icons.min.css" />
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+
+<!-- ── Firebase v10 (compat CDN — works without a bundler) ── -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -47,8 +53,6 @@
     min-height: 100vh;
     line-height: 1.6;
   }
-
-  .hidden { display: none !important; }
 
   /* ── Layout ── */
   .layout { display: flex; min-height: 100vh; }
@@ -131,6 +135,66 @@
   }
   .sidebar-subject:hover { color: var(--text); }
   .sidebar-subject.active { color: var(--text); font-weight: 500; }
+  .sidebar-subject-wrap {
+    display: flex; align-items: center; gap: 0;
+    border-radius: 8px;
+  }
+  .sidebar-subject-wrap:hover .sidebar-subj-del { opacity: 1; }
+  .sidebar-subject-wrap .sidebar-subject {
+    flex: 1; border-radius: 8px 0 0 8px;
+  }
+  .sidebar-subject-wrap .sidebar-subject:only-child { border-radius: 8px; }
+  .sidebar-subj-del {
+    flex-shrink: 0; opacity: 0; transition: opacity .15s, color .15s, background .15s;
+    width: 24px; height: 100%; min-height: 32px;
+    border: none; background: transparent; color: var(--text-3);
+    cursor: pointer; font-size: 12px; border-radius: 0 8px 8px 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0;
+  }
+  .sidebar-subj-del:hover { color: #e53e3e; background: #fff0f0; opacity: 1; }
+  .sidebar-add-subject {
+    display: flex; align-items: center; gap: 7px;
+    width: 100%; text-align: left;
+    padding: 7px 10px; border: 1.5px dashed var(--border);
+    border-radius: 8px; background: transparent; color: var(--text-3);
+    font-size: 13px; cursor: pointer; margin-top: 6px;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .sidebar-add-subject:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-light); }
+  .sidebar-add-subject i { font-size: 14px; }
+
+  /* Subject picker modal */
+  .subj-picker-search {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border);
+    border-radius: 8px; font-size: 14px; margin-bottom: 12px; outline: none;
+    background: var(--bg); color: var(--text);
+  }
+  .subj-picker-search:focus { border-color: var(--accent); }
+  .subj-picker-list {
+    display: flex; flex-direction: column; gap: 2px;
+    max-height: 340px; overflow-y: auto;
+  }
+  .subj-picker-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 8px; cursor: pointer;
+    font-size: 13.5px; color: var(--text); transition: background .12s;
+  }
+  .subj-picker-item:hover { background: var(--accent-light); color: var(--accent); }
+  .subj-picker-item.already-added { opacity: .38; pointer-events: none; }
+  .subj-picker-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .subj-picker-group { font-size: 10.5px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--text-3); padding: 8px 10px 3px; }
+
+  /* Confirm delete modal */
+  .confirm-modal { text-align: center; padding: 8px 0 4px; }
+  .confirm-modal .confirm-icon { font-size: 36px; margin-bottom: 10px; }
+  .confirm-modal h3 { font-size: 16px; margin-bottom: 8px; }
+  .confirm-modal p { font-size: 13.5px; color: var(--text-2); margin-bottom: 20px; line-height: 1.5; }
+  .confirm-actions { display: flex; gap: 10px; justify-content: center; }
+  .btn-danger-solid { background: #e53e3e; color: #fff; border: none; padding: 9px 22px;
+    border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: opacity .15s; }
+  .btn-danger-solid:hover { opacity: .88; }
   .sidebar-dot {
     width: 8px; height: 8px;
     border-radius: 50%;
@@ -142,20 +206,6 @@
     padding: 0.75rem 1rem;
     border-top: 1px solid var(--sidebar-border);
   }
-  .sidebar-account {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 8px; margin-bottom: 10px;
-  }
-  .sidebar-account-email {
-    font-size: 11.5px; color: var(--text-3);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .sidebar-account button {
-    background: none; border: none; cursor: pointer;
-    color: var(--text-3); font-size: 15px; padding: 3px 5px; border-radius: 5px;
-    flex-shrink: 0; transition: all 0.12s;
-  }
-  .sidebar-account button:hover { background: rgba(192,57,43,0.08); color: #c0392b; }
   .stats-mini { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
   .stat-mini { text-align: center; background: var(--bg); border-radius: 6px; padding: 5px 2px; }
   .stat-mini-num { font-size: 15px; font-weight: 500; color: var(--text); line-height: 1; }
@@ -213,11 +263,8 @@
     white-space: nowrap;
   }
   .btn:hover { background: var(--bg); }
-  .btn:disabled { opacity: .5; cursor: default; }
-  .btn:disabled:hover { background: var(--card); }
   .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   .btn-primary:hover { background: #1e3d80; border-color: #1e3d80; }
-  .btn-primary:disabled:hover { background: var(--accent); border-color: var(--accent); }
   .btn-danger { color: #c0392b; border-color: rgba(192,57,43,0.25); background: rgba(192,57,43,0.04); }
   .btn-danger:hover { background: rgba(192,57,43,0.1); }
 
@@ -304,6 +351,49 @@
   }
   .card-date { font-size: 11px; color: var(--text-3); }
   .card-actions { display: flex; gap: 4px; }
+  .card-group {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10.5px; font-weight: 500; color: var(--accent);
+    background: var(--accent-light); border-radius: 20px;
+    padding: 2px 9px; max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .card-group i { font-size: 11px; flex-shrink: 0; }
+  .card-groups { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 7px; }
+
+  /* ── Tag input (multi-group chips) ── */
+  .tag-input-box {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    width: 100%; min-height: 42px;
+    padding: 6px 8px;
+    font-size: 14px; font-family: 'DM Sans', sans-serif;
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--bg); color: var(--text);
+    cursor: text;
+    transition: border-color 0.15s;
+  }
+  .tag-input-box:focus-within { border-color: var(--accent); }
+  .tag-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12.5px; font-weight: 500;
+    background: var(--accent-light); color: var(--accent);
+    border-radius: 20px; padding: 4px 6px 4px 11px;
+    white-space: nowrap;
+  }
+  .tag-chip button {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%;
+    border: none; background: rgba(42,82,160,0.15); color: var(--accent);
+    font-size: 11px; line-height: 1; cursor: pointer; padding: 0;
+    transition: background 0.12s;
+  }
+  .tag-chip button:hover { background: rgba(42,82,160,0.3); }
+  .tag-input-field {
+    flex: 1 1 80px; min-width: 80px;
+    border: none; outline: none; background: transparent;
+    font-size: 14px; font-family: 'DM Sans', sans-serif; color: var(--text);
+    padding: 4px 2px;
+  }
   .icon-btn {
     background: none; border: none; cursor: pointer;
     color: var(--text-3); font-size: 15px;
@@ -467,118 +557,135 @@
   .sidebar-io-btn:hover { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
   .sidebar-io-btn i { font-size: 13px; }
 
-  /* ── Mobile menu toggle + sidebar overlay (hidden on desktop) ── */
-  .menu-toggle {
-    display: none;
-    background: none; border: none; cursor: pointer;
-    font-size: 20px; line-height: 1; color: var(--text);
-    padding: 6px 9px; border-radius: var(--radius-md);
-    margin-right: 2px; flex-shrink: 0;
-  }
-  .menu-toggle:hover { background: var(--bg); }
-
-  .sidebar-overlay {
-    display: none;
-    position: fixed; inset: 0;
-    background: rgba(17, 19, 24, 0.45);
-    z-index: 15;
-  }
-  .sidebar-overlay.show { display: block; }
-
-  /* ── Auth screen ── */
-  #authOverlay { z-index: 300; }
-  #authStatus { font-size: 12.5px; color: var(--text-3); margin-bottom: 1rem; }
-  #authError { font-size: 12.5px; color: #c0392b; background: rgba(192,57,43,0.08); padding: 9px 12px; border-radius: var(--radius-md); margin-bottom: 1rem; line-height: 1.5; }
-
-  /* ── Sync status banner ── */
-  #syncErrorBanner {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 400;
-    background: rgba(192,57,43,0.95); color: #fff;
-    padding: 10px 20px; font-size: 13px;
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  }
-  #syncErrorBanner button { background: none; border: none; color: #fff; text-decoration: underline; cursor: pointer; font-size: 12.5px; font-family: 'DM Sans', sans-serif; flex-shrink: 0; }
-
   /* ── Responsive ── */
   @media (max-width: 700px) {
-    .menu-toggle { display: inline-flex; align-items: center; justify-content: center; }
-
-    /* Sidebar becomes an off-canvas drawer instead of disappearing with no way back */
-    .sidebar {
-      width: 260px; min-width: 260px;
-      transform: translateX(-100%);
-      transition: transform 0.22s ease;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.18);
-      z-index: 20;
-    }
-    .sidebar.open { transform: translateX(0); }
-
+    .sidebar { width: 0; overflow: hidden; }
     .main { margin-left: 0; }
-    .topbar { padding: 0.75rem 1rem; flex-wrap: wrap; row-gap: 8px; }
-    .topbar h1 { font-size: 15px; }
-    .search-wrap { order: 3; flex: 1 1 100%; max-width: none; }
+    .topbar { padding: 0.75rem 1rem; }
     .content { padding: 1.25rem 1rem; }
-
-    .cards-grid, .vocab-grid, .formula-grid { grid-template-columns: 1fr; }
-
-    .modal { padding: 1.25rem; }
-    .flash-wrap { margin: 1.5rem auto; }
-    .flash-card { padding: 1.75rem 1.25rem; }
-    .flash-term { font-size: 21px; }
-
-    /* iOS Safari zooms the page in when a focused input's font-size is under 16px */
-    .search-input, .form-row input, .form-row textarea, .form-row select { font-size: 16px; }
   }
 
-  @media (max-width: 420px) {
-    #sort-label, #add-label { display: none; }   /* keep icons, drop labels to fit one row */
-    .btn { padding: 8px 11px; }
+  /* ── Auth / Login screen ── */
+  #auth-screen {
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
   }
-</style>
+  .auth-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 44px 40px 40px;
+    width: 100%; max-width: 380px; text-align: center;
+    box-shadow: 0 8px 40px rgba(0,0,0,.09);
+  }
+  .auth-logo { font-size: 32px; margin-bottom: 10px; }
+  .auth-card h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+  .auth-card .auth-sub { font-size: 13.5px; color: var(--text-2); margin-bottom: 28px; }
+  .auth-divider {
+    display: flex; align-items: center; gap: 10px;
+    margin: 18px 0; color: var(--text-3); font-size: 12px;
+  }
+  .auth-divider::before, .auth-divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+  .auth-input {
+    width: 100%; padding: 10px 13px; margin-bottom: 10px;
+    border: 1px solid var(--border); border-radius: 8px;
+    font-size: 14px; background: var(--bg); color: var(--text);
+    outline: none; transition: border-color .15s;
+  }
+  .auth-input:focus { border-color: var(--accent); }
+  .btn-google {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 10px 16px; border: 1.5px solid var(--border); border-radius: 8px;
+    background: var(--card); color: var(--text); font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: background .15s, border-color .15s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .btn-google:hover { background: var(--bg); border-color: var(--accent); }
+  .btn-google svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .btn-auth-primary {
+    width: 100%; padding: 10px; border: none; border-radius: 8px;
+    background: var(--accent); color: #fff; font-size: 14px; font-weight: 500;
+    cursor: pointer; font-family: 'DM Sans', sans-serif;
+    transition: opacity .15s; margin-bottom: 8px;
+  }
+  .btn-auth-primary:hover { opacity: .88; }
+  .auth-toggle { font-size: 13px; color: var(--text-2); margin-top: 12px; }
+  .auth-toggle a { color: var(--accent); cursor: pointer; text-decoration: none; font-weight: 500; }
+  .auth-toggle a:hover { text-decoration: underline; }
+  .auth-error {
+    font-size: 13px; color: #e53e3e; background: #fff0f0;
+    border: 1px solid #fca5a5; border-radius: 8px;
+    padding: 8px 12px; margin-bottom: 10px; display: none;
+  }
+  #auth-screen.hidden { display: none; }
+
+  /* ── User avatar in topbar ── */
+  .topbar-user {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 10px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--bg);
+    font-size: 13px; color: var(--text-2); transition: background .15s;
+    white-space: nowrap; max-width: 160px;
+  }
+  .topbar-user:hover { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
+  .topbar-avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    font-size: 11px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; overflow: hidden;
+  }
+  .topbar-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+  .topbar-user-name { overflow: hidden; text-overflow: ellipsis; }
+  .topbar-sync {
+    font-size: 11px; color: var(--text-3);
+    display: flex; align-items: center; gap: 4px;
+  }
+  .sync-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #22c55e; flex-shrink: 0;
+  }
+  .sync-dot.syncing { background: #f59e0b; animation: pulse 1s infinite; }
+  .sync-dot.error   { background: #ef4444; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
 </head>
 <body>
 
-<!-- ══════════════ Auth screen (shown until logged in) ══════════════ -->
-<div class="modal-overlay" id="authOverlay">
-  <div class="modal" style="max-width:380px;">
-    <div class="modal-header">
-      <h2>IB Study Notebook</h2>
-    </div>
-    <p style="font-size:13px;color:var(--text-2);margin-bottom:1.25rem;">Sign in to sync your notes across devices.</p>
+<!-- ── Auth / Login screen ─────────────────────────────── -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">📚</div>
+    <h1>IB Study Notebook</h1>
+    <p class="auth-sub">Sign in to sync your notes across devices</p>
 
-    <div class="form-row">
-      <label>Email</label>
-      <input type="email" id="authEmail" placeholder="you@example.com" autocomplete="username" />
-    </div>
-    <div class="form-row" style="margin-bottom:0.9rem;">
-      <label>Password</label>
-      <input type="password" id="authPassword" placeholder="6+ characters" autocomplete="current-password"
-        onkeydown="if(event.key==='Enter')handleLogin()" />
-    </div>
+    <!-- Google sign-in -->
+    <button class="btn-google" onclick="signInWithGoogle()">
+      <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+      Continue with Google
+    </button>
 
-    <div id="authError" class="hidden"></div>
-    <div id="authStatus">Connecting…</div>
+    <div class="auth-divider">or</div>
 
-    <div class="modal-actions" style="justify-content:stretch;">
-      <button class="btn" style="flex:1;justify-content:center;" id="authSignupBtn" onclick="handleSignup()" disabled>Sign Up</button>
-      <button class="btn btn-primary" style="flex:1;justify-content:center;" id="authLoginBtn" onclick="handleLogin()" disabled>Log In</button>
+    <!-- Email / password -->
+    <div id="auth-error" class="auth-error"></div>
+    <input class="auth-input" id="auth-email" type="email" placeholder="Email address"
+           autocomplete="email" onkeydown="if(event.key==='Enter')authSubmit()" />
+    <input class="auth-input" id="auth-password" type="password" placeholder="Password"
+           autocomplete="current-password" onkeydown="if(event.key==='Enter')authSubmit()" />
+    <button class="btn-auth-primary" id="auth-submit-btn" onclick="authSubmit()">Sign In</button>
+
+    <div class="auth-toggle" id="auth-toggle-text">
+      Don't have an account? <a onclick="toggleAuthMode()">Sign up</a>
     </div>
-    <div style="text-align:center;margin-top:1rem;">
-      <button onclick="handleForgotPassword()" style="background:none;border:none;color:var(--accent);text-decoration:underline;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;">Forgot password?</button>
+    <div style="margin-top:8px;">
+      <a style="font-size:12px;color:var(--text-3);cursor:pointer;" onclick="sendPasswordReset()">Forgot password?</a>
     </div>
   </div>
 </div>
 
-<!-- Persistent data-sync error banner (stays until dismissed, unlike a toast) -->
-<div id="syncErrorBanner" class="hidden">
-  <span id="syncErrorText"></span>
-  <button onclick="document.getElementById('syncErrorBanner').classList.add('hidden')">Dismiss</button>
-</div>
-
-<div class="layout hidden" id="appLayout">
-
-  <!-- Mobile sidebar backdrop -->
-  <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+<div class="layout">
 
   <!-- Sidebar -->
   <nav class="sidebar" id="sidebar">
@@ -600,47 +707,20 @@
     <button class="sidebar-item" onclick="setTab('exam')" id="nav-exam">
       <i class="ti ti-clipboard-list"></i> Exam &amp; Criteria
     </button>
+    <button class="sidebar-item" onclick="setTab('others')" id="nav-others">
+      <i class="ti ti-folder"></i> Others
+    </button>
 
     <div class="sidebar-section" style="margin-top:0.5rem;">Subject Filter</div>
     <button class="sidebar-subject active" onclick="setSubject('all')" id="subj-all">
       <span class="sidebar-dot" style="background:#111318"></span> All
     </button>
-    <button class="sidebar-subject" onclick="setSubject('jpn')" id="subj-jpn">
-      <span class="sidebar-dot" style="background:#b5451b"></span> Japanese
-    </button>
-    <button class="sidebar-subject" onclick="setSubject('eng')" id="subj-eng">
-      <span class="sidebar-dot" style="background:#5a3d7a"></span> English
-    </button>
-    <button class="sidebar-subject" onclick="setSubject('math')" id="subj-math">
-      <span class="sidebar-dot" style="background:#1a4f8b"></span> Math
-    </button>
-    <button class="sidebar-subject" onclick="setSubject('phys')" id="subj-phys">
-      <span class="sidebar-dot" style="background:#1a6b4a"></span> Physics
-    </button>
-    <button class="sidebar-subject" onclick="setSubject('ess')" id="subj-ess">
-      <span class="sidebar-dot" style="background:#4a7a2a"></span> ESS
-    </button>
-    <button class="sidebar-subject" onclick="setSubject('geo')" id="subj-geo">
-      <span class="sidebar-dot" style="background:#2a6b7a"></span> Geography
-    </button>
-    <button class="sidebar-subject" onclick="setSubject('tok')" id="subj-tok">
-      <span class="sidebar-dot" style="background:#7a3a9a"></span> TOK
-    </button>
-    <button class="sidebar-subject" onclick="setSubject('ee')" id="subj-ee">
-      <span class="sidebar-dot" style="background:#8b4513"></span> EE
-    </button>
-    <button class="sidebar-subject" onclick="setSubject('cas')" id="subj-cas">
-      <span class="sidebar-dot" style="background:#2e7d32"></span> CAS
-    </button>
-    <button class="sidebar-subject" onclick="setSubject('univ')" id="subj-univ">
-      <span class="sidebar-dot" style="background:#b8860b"></span> University
+    <div id="subj-list"></div>
+    <button class="sidebar-add-subject" onclick="openAddSubjectModal()">
+      <i class="ti ti-plus"></i> Add Subject
     </button>
 
     <div class="sidebar-bottom">
-      <div class="sidebar-account">
-        <span class="sidebar-account-email" id="userEmail"></span>
-        <button onclick="handleLogout()" title="Log out"><i class="ti ti-logout"></i></button>
-      </div>
       <div class="stats-mini">
         <div class="stat-mini">
           <div class="stat-mini-num" id="stat-cases">0</div>
@@ -674,19 +754,32 @@
   <!-- Main -->
   <div class="main">
     <header class="topbar">
-      <button class="menu-toggle" id="menuToggle" onclick="toggleSidebar()" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar">☰</button>
       <h1 id="topbar-title">Case Studies</h1>
       <div class="search-wrap">
         <i class="ti ti-search"></i>
         <input type="text" class="search-input" id="search-input" placeholder="Search..." oninput="render()" />
       </div>
+      <select class="btn" id="group-filter" onchange="render()" title="Filter by group" style="padding:8px 10px;">
+        <option value="">All Groups</option>
+      </select>
       <button class="btn" id="sort-btn" onclick="toggleSort()" title="Sort order">
         <i class="ti ti-arrows-move" id="sort-icon"></i>
         <span id="sort-label">Manual</span>
       </button>
       <button class="btn btn-primary" id="add-btn" onclick="openAdd()">
-        <i class="ti ti-plus"></i> <span id="add-label">Add</span>
+        <i class="ti ti-plus"></i> Add
       </button>
+      <!-- User / auth widget -->
+      <div style="display:flex;align-items:center;gap:8px;margin-left:4px;">
+        <span class="topbar-sync" id="sync-status" title="Sync status">
+          <span class="sync-dot" id="sync-dot"></span>
+          <span id="sync-label">Synced</span>
+        </span>
+        <div class="topbar-user" id="topbar-user" onclick="openUserMenu()" title="Account">
+          <div class="topbar-avatar" id="user-avatar">?</div>
+          <span class="topbar-user-name" id="user-name">Not signed in</span>
+        </div>
+      </div>
     </header>
 
     <div class="content" id="main-content"></div>
@@ -695,13 +788,346 @@
 
 <!-- Modal container -->
 <div id="modal-container"></div>
+<datalist id="group-suggestions"></datalist>
 
 <script>
+// ═════════════════════════════════════════════
+// Firebase configuration
+// ─────────────────────────────────────────────
+// Replace the values below with your own Firebase project settings.
+// Get them from: Firebase Console → Project Settings → Your apps → SDK setup.
+// ─────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyAI1RdaXEBfxHUOmJtEpELN5uVWZdNKXeA",
+  authDomain:        "ibstudy-notebook.firebaseapp.com",
+  projectId:         "ibstudy-notebook",
+  storageBucket:     "ibstudy-notebook.firebasestorage.app",
+  messagingSenderId: "546390368913",
+  appId:             "1:546390368913:web:18e083125a9f156ff35530",
+  measurementId:     "G-PSXLFPFQ2Z",
+};
+
+// ── Firebase init ──────────────────────────────────────────
+// Wrapped in try/catch so that if the SDK hasn't loaded (e.g. opened as
+// a local file:// or CDN blocked), the app still runs in localStorage mode.
+let fbAuth = null, fbDb = null, fbAnalytics = null;
+let _firebaseReady = false;
+
+try {
+  firebase.initializeApp(FIREBASE_CONFIG);
+  fbAuth      = firebase.auth();
+  fbDb        = firebase.firestore();
+  try { fbAnalytics = firebase.analytics(); } catch(e) { /* analytics optional */ }
+  _firebaseReady = true;
+} catch (e) {
+  console.warn('Firebase failed to initialise — running in offline (localStorage) mode.', e);
+}
+
+// ── Auth state ─────────────────────────────────────────────
+let currentUser = null;
+let authMode    = 'signin';
+
+function onUserSignedIn(user) {
+  currentUser = user;
+  document.getElementById('auth-screen').classList.add('hidden');
+  updateUserWidget(user);
+  loadFromFirestore();
+}
+
+function onUserSignedOut() {
+  currentUser = null;
+  updateUserWidget(null);
+  document.getElementById('auth-screen').classList.remove('hidden');
+  state.cases = []; state.vocabs = []; state.formulas = [];
+  state.exams = []; state.others = []; state.subjects = [...DEFAULT_SUBJECTS];
+  render();
+}
+
+if (_firebaseReady && fbAuth) {
+  fbAuth.onAuthStateChanged(user => {
+    if (user) onUserSignedIn(user);
+    else      onUserSignedOut();
+  });
+} else {
+  // No Firebase — skip login screen and go straight to localStorage mode
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('sync-label').textContent = 'Local only';
+  document.getElementById('sync-dot').style.background = '#aab2c0';
+}
+
+// ── User widget ────────────────────────────────────────────
+function updateUserWidget(user) {
+  const avatarEl = document.getElementById('user-avatar');
+  const nameEl   = document.getElementById('user-name');
+  if (!user) {
+    avatarEl.innerHTML = '?'; nameEl.textContent = 'Not signed in'; return;
+  }
+  const displayName = user.displayName || user.email || 'User';
+  nameEl.textContent = displayName.split('@')[0]; // trim email domain
+  if (user.photoURL) {
+    avatarEl.innerHTML = `<img src="${user.photoURL}" alt="">`;
+  } else {
+    avatarEl.textContent = (displayName[0] || '?').toUpperCase();
+  }
+}
+
+function setSyncStatus(status) {
+  // status: 'synced' | 'syncing' | 'error' | 'offline'
+  const dot   = document.getElementById('sync-dot');
+  const label = document.getElementById('sync-label');
+  const map = {
+    synced:  ['',         'Synced'],
+    syncing: ['syncing',  'Saving…'],
+    error:   ['error',    'Error'],
+    offline: ['',         'Offline'],
+  };
+  const [cls, text] = map[status] || map.synced;
+  dot.className = 'sync-dot' + (cls ? ' '+cls : '');
+  label.textContent = text;
+  dot.style.background = status === 'synced'  ? '#22c55e'
+                       : status === 'syncing' ? '#f59e0b'
+                       : status === 'error'   ? '#ef4444'
+                       :                        '#aab2c0';
+}
+
+function openUserMenu() {
+  if (!currentUser) return;
+  const email = currentUser.email || '';
+  const name  = currentUser.displayName || email;
+  showModal(`
+    <div class="modal-header">
+      <h2>Account</h2>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;padding:12px 0 20px;">
+      <div class="topbar-avatar" style="width:48px;height:48px;font-size:20px;flex-shrink:0;">
+        ${currentUser.photoURL ? `<img src="${currentUser.photoURL}" alt="">` : (name[0]||'?').toUpperCase()}
+      </div>
+      <div>
+        <div style="font-weight:600;font-size:15px;">${esc(name)}</div>
+        <div style="font-size:12.5px;color:var(--text-2);">${esc(email)}</div>
+      </div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-start;gap:8px;">
+      <button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn btn-danger" onclick="signOutUser()"><i class="ti ti-logout"></i> Sign Out</button>
+    </div>
+  `);
+}
+
+// ── Google sign-in ─────────────────────────────────────────
+function signInWithGoogle() {
+  if (!fbAuth) { showAuthError('Firebase is not available in this environment.'); return; }
+  const provider = new firebase.auth.GoogleAuthProvider();
+  fbAuth.signInWithPopup(provider).catch(err => showAuthError(err.message));
+}
+
+// ── Email / password ───────────────────────────────────────
+function toggleAuthMode() {
+  authMode = authMode === 'signin' ? 'signup' : 'signin';
+  const isSignup = authMode === 'signup';
+  document.getElementById('auth-submit-btn').textContent  = isSignup ? 'Create Account' : 'Sign In';
+  document.getElementById('auth-toggle-text').innerHTML   = isSignup
+    ? 'Already have an account? <a onclick="toggleAuthMode()">Sign in</a>'
+    : 'Don\'t have an account? <a onclick="toggleAuthMode()">Sign up</a>';
+  document.getElementById('auth-error').style.display = 'none';
+}
+
+function authSubmit() {
+  if (!fbAuth) { showAuthError('Firebase is not available in this environment.'); return; }
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  if (!email || !password) { showAuthError('Please enter your email and password.'); return; }
+  if (authMode === 'signup') {
+    fbAuth.createUserWithEmailAndPassword(email, password)
+      .catch(err => showAuthError(friendlyAuthError(err.code)));
+  } else {
+    fbAuth.signInWithEmailAndPassword(email, password)
+      .catch(err => showAuthError(friendlyAuthError(err.code)));
+  }
+}
+
+function sendPasswordReset() {
+  if (!fbAuth) return;
+  const email = document.getElementById('auth-email').value.trim();
+  if (!email) { showAuthError('Enter your email address first.'); return; }
+  fbAuth.sendPasswordResetEmail(email)
+    .then(() => showAuthError('Password reset email sent — check your inbox.', 'info'))
+    .catch(err => showAuthError(friendlyAuthError(err.code)));
+}
+
+function signOutUser() {
+  closeModal();
+  if (fbAuth) fbAuth.signOut();
+}
+
+function showAuthError(msg, type='error') {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.style.color   = type === 'info' ? 'var(--accent)' : '#e53e3e';
+  el.style.background = type === 'info' ? 'var(--accent-light)' : '#fff0f0';
+  el.style.borderColor = type === 'info' ? 'var(--accent)' : '#fca5a5';
+}
+
+function friendlyAuthError(code) {
+  const map = {
+    'auth/user-not-found':      'No account found with this email.',
+    'auth/wrong-password':      'Incorrect password.',
+    'auth/email-already-in-use':'This email is already registered.',
+    'auth/invalid-email':       'Please enter a valid email address.',
+    'auth/weak-password':       'Password must be at least 6 characters.',
+    'auth/too-many-requests':   'Too many attempts. Please try again later.',
+    'auth/popup-closed-by-user':'Sign-in popup was closed. Please try again.',
+    'auth/network-request-failed': 'Network error. Check your connection.',
+  };
+  return map[code] || 'Sign-in failed. Please try again.';
+}
+
+// ── Firestore sync ─────────────────────────────────────────
+// All user data lives in a single document: users/{uid}/data/main
+// This keeps reads/writes simple and avoids per-collection rules complexity.
+let _saveTimer = null;
+
+function userDocRef() {
+  if (!currentUser || !fbDb) return null;
+  return fbDb.collection('users').doc(currentUser.uid).collection('data').doc('main');
+}
+
+async function loadFromFirestore() {
+  if (!currentUser || !fbDb) { load(); render(); return; }
+  setSyncStatus('syncing');
+  try {
+    const ref  = userDocRef();
+    const snap = await ref.get();
+    if (snap.exists) {
+      const d = snap.data();
+      state.cases    = d.cases    || [];
+      state.vocabs   = d.vocabs   || [];
+      state.formulas = d.formulas || [];
+      state.exams    = d.exams    || [];
+      state.others   = d.others   || [];
+      state.subjects = Array.isArray(d.subjects) && d.subjects.length ? d.subjects : [...DEFAULT_SUBJECTS];
+    } else {
+      // First sign-in: if there is localStorage data, offer to migrate it.
+      loadFromLocalStorage();
+      if (state.cases.length || state.vocabs.length || state.formulas.length ||
+          state.exams.length  || state.others.length) {
+        saveToFirestore(); // push local data up
+      }
+    }
+    migrateExams(); migrateGroups();
+    setSyncStatus('synced');
+  } catch (err) {
+    console.warn('Firestore load failed, falling back to localStorage:', err);
+    loadFromLocalStorage();
+    setSyncStatus('offline');
+  }
+  render();
+}
+
+function loadFromLocalStorage() {
+  try { state.cases    = JSON.parse(localStorage.getItem('ib_cases')    || '[]'); } catch(e) { state.cases    = []; }
+  try { state.vocabs   = JSON.parse(localStorage.getItem('ib_vocabs')   || '[]'); } catch(e) { state.vocabs   = []; }
+  try { state.formulas = JSON.parse(localStorage.getItem('ib_formulas') || '[]'); } catch(e) { state.formulas = []; }
+  try { state.exams    = JSON.parse(localStorage.getItem('ib_exams')    || '[]'); } catch(e) { state.exams    = []; }
+  try { state.others   = JSON.parse(localStorage.getItem('ib_others')   || '[]'); } catch(e) { state.others   = []; }
+  try {
+    const saved = JSON.parse(localStorage.getItem('ib_subjects') || 'null');
+    state.subjects = Array.isArray(saved) && saved.length ? saved : [...DEFAULT_SUBJECTS];
+  } catch(e) { state.subjects = [...DEFAULT_SUBJECTS]; }
+}
+
+async function saveToFirestore() {
+  if (!currentUser || !fbDb) return;
+  setSyncStatus('syncing');
+  try {
+    await userDocRef().set({
+      cases:    state.cases,
+      vocabs:   state.vocabs,
+      formulas: state.formulas,
+      exams:    state.exams,
+      others:   state.others,
+      subjects: state.subjects,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    setSyncStatus('synced');
+  } catch (err) {
+    console.warn('Firestore save failed:', err);
+    setSyncStatus('error');
+  }
+}
+
 // ─────────────────────────────────────────────
 // Data helpers
 // ─────────────────────────────────────────────
-const SUBJECT_NAMES = { jpn:'Japanese', eng:'English', math:'Math', phys:'Physics', ess:'ESS', geo:'Geography', tok:'TOK', ee:'EE', cas:'CAS', univ:'University' };
-const SUBJECT_KEYS  = ['jpn','eng','math','phys','ess','geo','tok','ee','cas','univ'];
+// ─────────────────────────────────────────────
+// Full IBDP subject catalog (all official subjects)
+// Stored as { key, name, color, group } — used only for the picker modal.
+// ─────────────────────────────────────────────
+const IBDP_CATALOG = [
+  // Core
+  { key:'tok',  name:'TOK',                        color:'#7a3a9a', group:'Core' },
+  { key:'ee',   name:'EE',                         color:'#8b4513', group:'Core' },
+  { key:'cas',  name:'CAS',                        color:'#2e7d32', group:'Core' },
+  // Studies in Language & Literature
+  { key:'eng',  name:'English A: Language & Literature', color:'#5a3d7a', group:'Language & Literature' },
+  { key:'eng_ll',name:'English A: Literature',    color:'#6a4d8a', group:'Language & Literature' },
+  { key:'jpn',  name:'Japanese A: Literature',    color:'#b5451b', group:'Language & Literature' },
+  { key:'jpn_ll',name:'Japanese A: Language & Literature', color:'#c5551b', group:'Language & Literature' },
+  { key:'fre',  name:'French A',                  color:'#1565c0', group:'Language & Literature' },
+  { key:'spa',  name:'Spanish A',                 color:'#c62828', group:'Language & Literature' },
+  { key:'chi',  name:'Chinese A',                 color:'#6a1c1c', group:'Language & Literature' },
+  { key:'kor',  name:'Korean A',                  color:'#4a148c', group:'Language & Literature' },
+  // Language Acquisition
+  { key:'eng_b', name:'English B',               color:'#37474f', group:'Language Acquisition' },
+  { key:'fre_b', name:'French B',                color:'#0d47a1', group:'Language Acquisition' },
+  { key:'spa_b', name:'Spanish B',               color:'#b71c1c', group:'Language Acquisition' },
+  { key:'jpn_b', name:'Japanese B',              color:'#bf360c', group:'Language Acquisition' },
+  { key:'chi_b', name:'Chinese B',               color:'#4e342e', group:'Language Acquisition' },
+  { key:'ger_b', name:'German B',                color:'#212121', group:'Language Acquisition' },
+  { key:'lat',   name:'Latin',                   color:'#5d4037', group:'Language Acquisition' },
+  // Individuals & Societies
+  { key:'hist',  name:'History',                 color:'#4e342e', group:'Individuals & Societies' },
+  { key:'geo',   name:'Geography',               color:'#2a6b7a', group:'Individuals & Societies' },
+  { key:'econ',  name:'Economics',               color:'#1b5e20', group:'Individuals & Societies' },
+  { key:'psych', name:'Psychology',              color:'#880e4f', group:'Individuals & Societies' },
+  { key:'phil',  name:'Philosophy',              color:'#4527a0', group:'Individuals & Societies' },
+  { key:'bm',    name:'Business Management',    color:'#e65100', group:'Individuals & Societies' },
+  { key:'itgs',  name:'ITGS',                    color:'#006064', group:'Individuals & Societies' },
+  { key:'glpol', name:'Global Politics',         color:'#1a237e', group:'Individuals & Societies' },
+  { key:'sos',   name:'Social and Cultural Anthropology', color:'#3e2723', group:'Individuals & Societies' },
+  // Sciences
+  { key:'phys',  name:'Physics',                color:'#1a4f8b', group:'Sciences' },
+  { key:'chem',  name:'Chemistry',              color:'#006633', group:'Sciences' },
+  { key:'bio',   name:'Biology',                color:'#2e7d32', group:'Sciences' },
+  { key:'ess',   name:'ESS',                    color:'#4a7a2a', group:'Sciences' },
+  { key:'cs',    name:'Computer Science',       color:'#0277bd', group:'Sciences' },
+  { key:'dm',    name:'Design Technology',      color:'#f57f17', group:'Sciences' },
+  { key:'spex',  name:'Sports Exercise & Health Science', color:'#00695c', group:'Sciences' },
+  // Mathematics
+  { key:'mathaa',name:'Math: Analysis & Approaches',   color:'#1a4f8b', group:'Mathematics' },
+  { key:'mathai',name:'Math: Applications & Interpretation', color:'#0d47a1', group:'Mathematics' },
+  // Arts
+  { key:'visart',name:'Visual Arts',            color:'#ad1457', group:'Arts' },
+  { key:'music', name:'Music',                  color:'#6a1b9a', group:'Arts' },
+  { key:'theatre',name:'Theatre',               color:'#e91e63', group:'Arts' },
+  { key:'dance', name:'Dance',                  color:'#d81b60', group:'Arts' },
+  { key:'film',  name:'Film',                   color:'#c2185b', group:'Arts' },
+  // Interdisciplinary
+  { key:'lang_lit2',name:'Literature & Performance', color:'#7b1fa2', group:'Interdisciplinary' },
+  // Other
+  { key:'univ',  name:'University Prep',        color:'#b8860b', group:'Other' },
+  { key:'other', name:'Other',                  color:'#78909c', group:'Other' },
+];
+
+// Build lookup maps from catalog
+const SUBJECT_NAMES = {};
+const SUBJECT_COLORS = {};
+IBDP_CATALOG.forEach(s => { SUBJECT_NAMES[s.key] = s.name; SUBJECT_COLORS[s.key] = s.color; });
+
+// Default subjects active on first launch
+const DEFAULT_SUBJECTS = ['tok','ee','cas'];
 
 let state = {
   tab: 'case',
@@ -711,19 +1137,31 @@ let state = {
   vocabs:   [],
   formulas: [],
   exams:    [],
+  others:   [],
+  subjects: null,
 };
 
-// Data now lives in Firestore (see the Firebase block below), keyed by
-// account, so it follows you across devices. `applyCloudData()` populates
-// `state` after login and on every remote change; `save()` pushes local
-// edits back up.
-function applyCloudData(data) {
-  state.cases    = data.cases    || [];
-  state.vocabs   = data.vocabs   || [];
-  state.formulas = data.formulas || [];
-  state.exams    = data.exams    || [];
+function load() {
+  // Fallback only — main load path goes through loadFromFirestore() after auth.
+  loadFromLocalStorage();
   migrateExams();
-  render();
+  migrateGroups();
+}
+
+// One-time migration: the single-value "group" field was upgraded to a
+// "groups" array so each item can carry multiple tags. Convert any legacy
+// string value into a one-element array (or empty array if absent) so
+// existing data keeps working with the new multi-tag UI.
+function migrateGroups() {
+  let changed = false;
+  [...state.cases, ...state.vocabs, ...state.formulas, ...state.exams].forEach(item => {
+    if (!Array.isArray(item.groups)) {
+      item.groups = (typeof item.group === 'string' && item.group.trim()) ? [item.group.trim()] : [];
+      changed = true;
+    }
+    if ('group' in item) { delete item.group; changed = true; }
+  });
+  if (changed) save();
 }
 
 // One-time migration: merge any legacy "notes" field into "criteria"
@@ -746,7 +1184,16 @@ function migrateExams() {
 }
 
 function save() {
-  persistToCloud();
+  // Write to localStorage as offline cache.
+  localStorage.setItem('ib_cases',    JSON.stringify(state.cases));
+  localStorage.setItem('ib_vocabs',   JSON.stringify(state.vocabs));
+  localStorage.setItem('ib_formulas', JSON.stringify(state.formulas));
+  localStorage.setItem('ib_exams',    JSON.stringify(state.exams));
+  localStorage.setItem('ib_others',   JSON.stringify(state.others));
+  localStorage.setItem('ib_subjects', JSON.stringify(state.subjects));
+  // Debounce Firestore writes to avoid hammering on rapid edits.
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(saveToFirestore, 800);
 }
 
 function esc(s) {
@@ -780,8 +1227,8 @@ function uid()   { return Date.now() + Math.random().toString(36).slice(2,6); }
 // ─────────────────────────────────────────────
 const SORT_BTN = {
   manual: ['ti ti-arrows-move',     'Manual'],
-  asc:    ['ti ti-sort-ascending',  'Ascending'],
-  desc:   ['ti ti-sort-descending', 'Descending'],
+  asc:    ['ti ti-sort-ascending',  'A → Z'],
+  desc:   ['ti ti-sort-descending', 'Z → A'],
 };
 
 function applySortButton() {
@@ -799,70 +1246,293 @@ function toggleSort() {
 
 function getSorted(list) {
   // Manual : drag to set the order (the saved array order).
-  // Ascending  : view that manual order from the front (same direction, view-only).
-  // Descending : view that manual order from the back (reversed, view-only).
+  // A→Z asc : alphabetical ascending by title/term/name.
+  // Z→A desc: alphabetical descending (reversed).
   return state.sort === 'desc' ? [...list].reverse() : [...list];
 }
 
 function setTab(t) {
   state.tab = t;
-  ['case','vocab','formula','exam'].forEach(k => {
+  ['case','vocab','formula','exam','others'].forEach(k => {
     document.getElementById('nav-'+k).classList.toggle('active', k===t);
   });
-  const titles = { case:'Case Studies', vocab:'Vocabulary', formula:'Formulas', exam:'Exam & Criteria' };
+  const titles = { case:'Case Studies', vocab:'Vocabulary', formula:'Formulas', exam:'Exam & Criteria', others:'Others' };
   document.getElementById('topbar-title').textContent = titles[t];
   render();
-  closeSidebar();
 }
 
 function setSubject(s) {
   state.subject = s;
-  ['all','jpn','eng','math','phys','ess','geo','tok','ee','cas','univ'].forEach(k => {
-    document.getElementById('subj-'+k).classList.toggle('active', k===s);
+  document.getElementById('subj-all').classList.toggle('active', s === 'all');
+  state.subjects.forEach(k => {
+    const el = document.getElementById('subj-' + k);
+    if (el) el.classList.toggle('active', k === s);
   });
   render();
-  closeSidebar();
 }
 
-// ─────────────────────────────────────────────
-// Mobile sidebar drawer
-// ─────────────────────────────────────────────
-function openSidebar() {
-  document.getElementById('sidebar').classList.add('open');
-  document.getElementById('sidebarOverlay').classList.add('show');
-  document.getElementById('menuToggle').setAttribute('aria-expanded', 'true');
+// ── Dynamic sidebar subject list ───────────────────────────
+function subjectColor(key) {
+  return SUBJECT_COLORS[key] || '#78909c';
 }
-function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebarOverlay').classList.remove('show');
-  document.getElementById('menuToggle').setAttribute('aria-expanded', 'false');
+
+function renderSubjectList() {
+  const list = document.getElementById('subj-list');
+  if (!list) return;
+  list.innerHTML = '';
+  state.subjects.forEach(key => {
+    const name  = SUBJECT_NAMES[key] || key;
+    const color = subjectColor(key);
+    const wrap  = document.createElement('div');
+    wrap.className = 'sidebar-subject-wrap';
+
+    const btn = document.createElement('button');
+    btn.className = 'sidebar-subject' + (state.subject === key ? ' active' : '');
+    btn.id = 'subj-' + key;
+    btn.innerHTML = `<span class="sidebar-dot" style="background:${color}"></span> ${esc(name)}`;
+    btn.addEventListener('click', () => setSubject(key));
+
+    const del = document.createElement('button');
+    del.className = 'sidebar-subj-del';
+    del.title = `Remove ${name}`;
+    del.innerHTML = '✕';
+    del.addEventListener('click', (e) => { e.stopPropagation(); confirmDeleteSubject(key); });
+
+    wrap.appendChild(btn);
+    wrap.appendChild(del);
+    list.appendChild(wrap);
+  });
 }
-function toggleSidebar() {
-  document.getElementById('sidebar').classList.contains('open') ? closeSidebar() : openSidebar();
+
+// ── Add Subject modal ──────────────────────────────────────
+function openAddSubjectModal() {
+  showModal(`
+    <h2 style="margin-bottom:4px;">Add Subject</h2>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:14px;">
+      Search for an IBDP subject to add to your sidebar.
+    </p>
+    <input class="subj-picker-search" id="subj-search" type="text"
+           placeholder="e.g. Physics, Economics, Visual Arts…" autocomplete="off"
+           oninput="filterSubjectPicker()" />
+    <div class="subj-picker-list" id="subj-picker-list"></div>
+    <div class="modal-actions" style="margin-top:14px;">
+      <button class="btn" onclick="closeModal()">Close</button>
+    </div>
+  `);
+  renderSubjectPicker('');
+  document.getElementById('subj-search').focus();
 }
-// If the viewport is resized past the mobile breakpoint while the drawer is open, reset it
-window.addEventListener('resize', () => { if (window.innerWidth > 700) closeSidebar(); });
+
+function filterSubjectPicker() {
+  renderSubjectPicker(document.getElementById('subj-search').value);
+}
+
+function renderSubjectPicker(q) {
+  const container = document.getElementById('subj-picker-list');
+  if (!container) return;
+  const query = q.trim().toLowerCase();
+  let html = '';
+  let lastGroup = null;
+  IBDP_CATALOG.forEach(s => {
+    const match = !query ||
+      s.name.toLowerCase().includes(query) ||
+      s.group.toLowerCase().includes(query) ||
+      s.key.toLowerCase().includes(query);
+    if (!match) return;
+    if (s.group !== lastGroup) {
+      html += `<div class="subj-picker-group">${esc(s.group)}</div>`;
+      lastGroup = s.group;
+    }
+    const added = state.subjects.includes(s.key);
+    html += `<div class="subj-picker-item${added ? ' already-added' : ''}"
+               onclick="addSubject('${s.key}')">
+      <span class="subj-picker-dot" style="background:${s.color}"></span>
+      <span>${esc(s.name)}</span>
+      ${added ? '<span style="margin-left:auto;font-size:12px;color:var(--text-3);">Added</span>' : ''}
+    </div>`;
+  });
+  if (!html) html = `<p style="padding:16px;text-align:center;color:var(--text-3);font-size:13px;">No subjects found for "${esc(q)}"</p>`;
+  container.innerHTML = html;
+}
+
+function addSubject(key) {
+  if (state.subjects.includes(key)) return;
+  state.subjects.push(key);
+  save();
+  renderSubjectList();
+  // Refresh the picker to mark this item as added
+  const q = document.getElementById('subj-search');
+  if (q) renderSubjectPicker(q.value);
+  updateStats();
+}
+
+// ── Delete Subject confirmation ────────────────────────────
+function confirmDeleteSubject(key) {
+  const name = SUBJECT_NAMES[key] || key;
+  const color = subjectColor(key);
+  // Count how many items use this subject
+  const count = [
+    ...state.cases, ...state.vocabs, ...state.formulas, ...state.exams
+  ].filter(item => item.subject === key).length;
+
+  const warn = count > 0
+    ? `<p style="color:#e53e3e;font-size:13px;margin-bottom:6px;">
+        ⚠️ ${count} item${count>1?'s':''} assigned to this subject will lose their subject label.
+       </p>`
+    : '';
+
+  showModal(`
+    <div class="confirm-modal">
+      <div class="confirm-icon">🗑️</div>
+      <h3>Remove "${esc(name)}"?</h3>
+      <p>This will remove <strong>${esc(name)}</strong> from your subject filter.<br>
+         Items assigned to it will not be deleted.</p>
+      ${warn}
+      <div class="confirm-actions">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn-danger-solid" onclick="deleteSubject('${key}')">Remove Subject</button>
+      </div>
+    </div>
+  `);
+}
+
+function deleteSubject(key) {
+  state.subjects = state.subjects.filter(k => k !== key);
+  if (state.subject === key) { state.subject = 'all'; }
+  save();
+  renderSubjectList();
+  setSubject(state.subject);
+  closeModal();
+  updateStats();
+}
 
 // ─────────────────────────────────────────────
 // Render
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Groups (tag-like grouping across all content types)
+// ─────────────────────────────────────────────
+// "groups" is an array of free-text labels the user assigns when adding/
+// editing any item (Case, Vocab, Formula, Exam). Multiple items sharing a
+// group name belong to that group, and the group filter dropdown lets the
+// user quickly narrow the current tab down to just that group.
+// Render a row of small group-tag chips for card grids and detail modals.
+function groupChipsHTML(groups, variant) {
+  if (!groups || !groups.length) return '';
+  if (variant === 'detail') {
+    return groups.map(g =>
+      `<span class="detail-sub-badge" style="background:var(--accent-light);color:var(--accent);"><i class="ti ti-tag"></i> ${esc(g)}</span>`
+    ).join('');
+  }
+  return `<div class="card-groups">${groups.map(g =>
+    `<span class="card-group"><i class="ti ti-tag"></i>${esc(g)}</span>`
+  ).join('')}</div>`;
+}
+
+function allGroups() {
+  const s = new Set();
+  [...state.cases, ...state.vocabs, ...state.formulas, ...state.exams, ...state.others].forEach(item => {
+    (item.groups||[]).forEach(g => { if (g && g.trim()) s.add(g.trim()); });
+  });
+  return [...s].sort((a, b) => a.localeCompare(b, 'ja'));
+}
+
+function refreshGroupFilter() {
+  const sel = document.getElementById('group-filter');
+  if (!sel) return;
+  const current = sel.value;
+  const groups = allGroups();
+  sel.innerHTML = `<option value="">All Groups</option>` +
+    groups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
+  // Keep the previous selection if it still exists, otherwise reset to "All".
+  sel.value = groups.includes(current) ? current : '';
+}
+
 function getFiltered(list, isCase) {
   const q = (document.getElementById('search-input')?.value||'').toLowerCase().trim();
+  const g = (document.getElementById('group-filter')?.value||'').trim();
   return list.filter(item => {
     if (state.subject !== 'all' && item.subject !== state.subject) return false;
+    if (g && !(item.groups||[]).includes(g)) return false;
     if (!q) return true;
     const text = isCase
-      ? [item.title, item.content, item.keyPoints].join(' ').toLowerCase()
-      : [item.term, item.definition, item.example].join(' ').toLowerCase();
+      ? [item.title, item.content, item.keyPoints, ...(item.groups||[])].join(' ').toLowerCase()
+      : [item.term, item.definition, item.example, ...(item.groups||[])].join(' ').toLowerCase();
     return text.includes(q);
   });
+}
+
+// ── Tag-input widget ───────────────────────────────────────
+// Renders a wide chip-style box where the user types a group name and
+// presses Enter/Comma to add it as a tag. Backspace on an empty field
+// removes the last tag. State is tracked in-memory per open form via a
+// data attribute on the box, and read back out at save time.
+function renderTagChips(boxId, tags) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  const field = box.querySelector('.tag-input-field');
+  box.querySelectorAll('.tag-chip').forEach(el => el.remove());
+  tags.forEach((tag, idx) => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    chip.innerHTML = `<span></span><button type="button" aria-label="Remove">✕</button>`;
+    chip.querySelector('span').textContent = tag;
+    chip.querySelector('button').addEventListener('click', () => {
+      tags.splice(idx, 1);
+      renderTagChips(boxId, tags);
+      field.focus();
+    });
+    box.insertBefore(chip, field);
+  });
+}
+
+function initTagInput(boxId, initialTags) {
+  const tags = [...(initialTags||[])];
+  const box = document.getElementById(boxId);
+  if (!box) return tags;
+  const field = box.querySelector('.tag-input-field');
+
+  function addFromField() {
+    const v = field.value.trim();
+    if (v && !tags.includes(v)) { tags.push(v); }
+    field.value = '';
+    renderTagChips(boxId, tags);
+  }
+
+  field.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter' || ev.key === ',') {
+      ev.preventDefault();
+      addFromField();
+    } else if (ev.key === 'Backspace' && !field.value && tags.length) {
+      tags.pop();
+      renderTagChips(boxId, tags);
+    }
+  });
+  field.addEventListener('blur', addFromField);
+  box.addEventListener('click', () => field.focus());
+
+  renderTagChips(boxId, tags);
+  return tags;
+}
+
+// Read out the current tags from a tag-input box at save time, including
+// any text still sitting in the input field that the user didn't press
+// Enter/Comma on (so a forgotten last tag isn't silently dropped).
+function readTagBox(boxId) {
+  const box = document.getElementById(boxId);
+  if (!box) return [];
+  const tags = [...box.querySelectorAll('.tag-chip > span')].map(el => el.textContent);
+  const field = box.querySelector('.tag-input-field');
+  const pending = field ? field.value.trim() : '';
+  if (pending && !tags.includes(pending)) tags.push(pending);
+  return tags;
 }
 
 // ─────────────────────────────────────────────
 // Drag-to-reorder (SortableJS) — active only in Manual sort mode
 // ─────────────────────────────────────────────
 let sortableInstance = null;
-const TYPE_KEY = { case:'cases', vocab:'vocabs', formula:'formulas', exam:'exams' };
+const TYPE_KEY = { case:'cases', vocab:'vocabs', formula:'formulas', exam:'exams', others:'others' };
 
 function destroySortable() {
   if (sortableInstance) {
@@ -916,24 +1586,21 @@ const DRAG_HINT = `<div class="drag-hint"><i class="ti ti-arrows-move"></i> Drag
 function render() {
   destroySortable();
   updateStats();
+  refreshGroupFilter();
   const t = state.tab;
   if      (t==='case')    renderCases();
   else if (t==='vocab')   renderVocabs();
   else if (t==='formula') renderFormulas();
   else if (t==='exam')    renderExams();
+  else if (t==='others')  renderOthers();
 }
 
 function updateStats() {
   document.getElementById('stat-cases').textContent    = state.cases.length;
   document.getElementById('stat-vocabs').textContent   = state.vocabs.length;
   document.getElementById('stat-formulas').textContent = state.formulas.length;
-  const s = new Set([
-    ...state.cases.map(c=>c.subject),
-    ...state.vocabs.map(v=>v.subject),
-    ...state.formulas.map(f=>f.subject),
-    ...state.exams.map(e=>e.subject)
-  ]);
-  document.getElementById('stat-subjs').textContent = s.size;
+  document.getElementById('stat-subjs').textContent    = state.subjects.length;
+  renderSubjectList();
 }
 
 // ─────────────────────────────────────────────
@@ -951,6 +1618,7 @@ function renderCases() {
       <div class="card" data-id="${c.id}" onclick="openCaseDetail('${c.id}')">
         <div class="card-stripe ${c.subject}"></div>
         <div class="card-sub ${c.subject}">${SUBJECT_NAMES[c.subject]||c.subject}</div>
+        ${groupChipsHTML(c.groups)}
         <div class="card-title">${esc(c.title)}</div>
         <div class="card-preview">${esc(stripMd(c.content))}</div>
         <div class="card-footer">
@@ -981,6 +1649,7 @@ function renderVocabs() {
       <div class="card" data-id="${v.id}" onclick="openVocabDetail('${v.id}')">
         <div class="card-stripe ${v.subject}"></div>
         <div class="card-sub ${v.subject}">${SUBJECT_NAMES[v.subject]||v.subject}</div>
+        ${groupChipsHTML(v.groups)}
         <div class="vocab-term">${esc(v.term)}</div>
         <div class="vocab-def">${esc(stripMd(v.definition))}</div>
         ${v.example ? `<div class="vocab-ex">${esc(stripMd(v.example))}</div>` : ''}
@@ -1068,8 +1737,8 @@ function shuffleFlash() {
 // Subject options HTML helper
 // ─────────────────────────────────────────────
 function subjectOpts(sel) {
-  return SUBJECT_KEYS.map(k=>
-    `<option value="${k}"${sel===k?' selected':''}>${SUBJECT_NAMES[k]}</option>`
+  return state.subjects.map(k =>
+    `<option value="${k}"${sel===k?' selected':''}>${esc(SUBJECT_NAMES[k]||k)}</option>`
   ).join('');
 }
 
@@ -1082,11 +1751,12 @@ function openAdd() {
   else if (t==='vocab')   openAddVocab();
   else if (t==='formula') openAddFormula();
   else if (t==='exam')    openAddExam();
+  else if (t==='others')  openAddOther();
 }
 
 function openAddCase(prefill={}) {
   const isEdit = !!prefill.id;
-  const defaultSub = prefill.subject || (state.subject !== 'all' ? state.subject : 'jpn');
+  const defaultSub = prefill.subject || (state.subject !== 'all' ? state.subject : (state.subjects[0]||'eng'));
   showModal(`
     <div class="modal-header">
       <h2>${isEdit?'Edit Case Study':'Add Case Study'}</h2>
@@ -1108,12 +1778,19 @@ function openAddCase(prefill={}) {
       <label>Key Points / Keywords (comma-separated)</label>
       <input type="text" id="f-keys" value="${esc(prefill.keyPoints||'')}" placeholder="e.g. PED, market structure, monopoly" />
     </div>
+    <div class="form-row">
+      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
+      <div class="tag-input-box" id="f-group-box">
+        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveCase('${prefill.id||''}')">Save</button>
     </div>
   `);
   document.getElementById('f-title').focus();
+  initTagInput('f-group-box', prefill.groups);
 }
 
 function saveCase(editId) {
@@ -1125,6 +1802,7 @@ function saveCase(editId) {
     title,
     content:   document.getElementById('f-content').value.trim(),
     keyPoints: document.getElementById('f-keys').value.trim(),
+    groups:    readTagBox('f-group-box'),
     date:      editId ? (state.cases.find(c=>c.id===editId)||{}).date||today() : today(),
   };
   if (editId) { const i=state.cases.findIndex(c=>c.id===editId); if(i>-1) state.cases[i]=item; }
@@ -1165,7 +1843,7 @@ function deleteCase(id) {
 // ─────────────────────────────────────────────
 function openAddVocab(prefill={}) {
   const isEdit = !!prefill.id;
-  const defaultSub = prefill.subject || (state.subject !== 'all' ? state.subject : 'jpn');
+  const defaultSub = prefill.subject || (state.subject !== 'all' ? state.subject : (state.subjects[0]||'eng'));
   showModal(`
     <div class="modal-header">
       <h2>${isEdit?'Edit Vocabulary':'Add Vocabulary'}</h2>
@@ -1187,12 +1865,19 @@ function openAddVocab(prefill={}) {
       <label>Example / Usage (optional)</label>
       <input type="text" id="f-ex" value="${esc(prefill.example||'')}" placeholder="e.g. The PED of luxury goods is typically greater than 1." />
     </div>
+    <div class="form-row">
+      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
+      <div class="tag-input-box" id="f-group-box">
+        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveVocab('${prefill.id||''}')">Save</button>
     </div>
   `);
   document.getElementById('f-term').focus();
+  initTagInput('f-group-box', prefill.groups);
 }
 
 function saveVocab(editId) {
@@ -1204,6 +1889,7 @@ function saveVocab(editId) {
     term,
     definition: document.getElementById('f-def').value.trim(),
     example:    document.getElementById('f-ex').value.trim(),
+    groups:    readTagBox('f-group-box'),
     date:       editId ? (state.vocabs.find(v=>v.id===editId)||{}).date||today() : today(),
   };
   if (editId) { const i=state.vocabs.findIndex(v=>v.id===editId); if(i>-1) state.vocabs[i]=item; }
@@ -1235,6 +1921,7 @@ function openCaseDetail(id) {
       <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
     </div>
     <span class="detail-sub-badge">${SUBJECT_NAMES[c.subject]||c.subject}</span>
+    ${groupChipsHTML(c.groups, 'detail')}
     <div class="detail-title">${esc(c.title)}</div>
     ${c.content ? `<div class="detail-section"><div class="detail-label">Content &amp; Analysis</div><div class="detail-body">${md(c.content)}</div></div>` : ''}
     ${keys.length ? `<div class="detail-section"><div class="detail-label">Key Points</div><div class="keypills">${keys.map(k=>`<span class="keypill">${esc(k)}</span>`).join('')}</div></div>` : ''}
@@ -1258,6 +1945,7 @@ function openVocabDetail(id) {
       <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
     </div>
     <span class="detail-sub-badge">${SUBJECT_NAMES[v.subject]||v.subject}</span>
+    ${groupChipsHTML(v.groups, 'detail')}
     <div class="detail-title">${esc(v.term)}</div>
     ${v.definition ? `<div class="detail-section"><div class="detail-label">Definition</div><div class="detail-body">${md(v.definition)}</div></div>` : ''}
     ${v.example ? `<div class="detail-section"><div class="detail-label">Example / Usage</div><div class="detail-body">${md(v.example)}</div></div>` : ''}
@@ -1279,10 +1967,12 @@ function openVocabDetail(id) {
 function renderFormulas() {
   const el = document.getElementById('main-content');
   const q  = (document.getElementById('search-input')?.value||'').toLowerCase().trim();
+  const g  = (document.getElementById('group-filter')?.value||'').trim();
   const items = getSorted(state.formulas.filter(f => {
     if (state.subject !== 'all' && f.subject !== state.subject) return false;
+    if (g && !(f.groups||[]).includes(g)) return false;
     if (!q) return true;
-    return [f.name, f.expression, f.description, f.units].join(' ').toLowerCase().includes(q);
+    return [f.name, f.expression, f.description, f.units, ...(f.groups||[])].join(' ').toLowerCase().includes(q);
   }));
 
   if (!state.formulas.length) {
@@ -1295,6 +1985,7 @@ function renderFormulas() {
       <div class="card" data-id="${f.id}" onclick="openFormulaDetail('${f.id}')">
         <div class="card-stripe ${f.subject}"></div>
         <div class="card-sub ${f.subject}">${SUBJECT_NAMES[f.subject]||f.subject}</div>
+        ${groupChipsHTML(f.groups)}
         <div class="formula-name">${esc(f.name)}</div>
         <div class="formula-expr">${esc(f.expression)}</div>
         ${f.description ? `<div class="formula-desc">${esc(stripMd(f.description))}</div>` : ''}
@@ -1318,7 +2009,7 @@ function renderFormulas() {
 
 function openAddFormula(prefill={}) {
   const isEdit = !!prefill.id;
-  const defaultSub = prefill.subject || (state.subject !== 'all' ? state.subject : 'phys');
+  const defaultSub = prefill.subject || (state.subject !== 'all' ? state.subject : (state.subjects[0]||'eng'));
   showModal(`
     <div class="modal-header">
       <h2>${isEdit ? 'Edit Formula' : 'Add Formula'}</h2>
@@ -1344,12 +2035,19 @@ function openAddFormula(prefill={}) {
       <label>Description / Variables (optional)</label>
       <textarea id="f-desc" style="min-height:90px;" placeholder="Explain each variable, when to use this formula, derivation notes...">${esc(prefill.description||'')}</textarea>
     </div>
+    <div class="form-row">
+      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
+      <div class="tag-input-box" id="f-group-box">
+        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveFormula('${prefill.id||''}')">Save</button>
     </div>
   `);
   document.getElementById('f-name').focus();
+  initTagInput('f-group-box', prefill.groups);
 }
 
 function saveFormula(editId) {
@@ -1364,6 +2062,7 @@ function saveFormula(editId) {
     expression,
     units:       document.getElementById('f-units').value.trim(),
     description: document.getElementById('f-desc').value.trim(),
+    groups:    readTagBox('f-group-box'),
     date:        editId ? (state.formulas.find(f=>f.id===editId)||{}).date||today() : today(),
   };
   if (editId) { const i = state.formulas.findIndex(f=>f.id===editId); if(i>-1) state.formulas[i]=item; }
@@ -1391,6 +2090,7 @@ function openFormulaDetail(id) {
       <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
     </div>
     <span class="detail-sub-badge">${SUBJECT_NAMES[f.subject]||f.subject}</span>
+    ${groupChipsHTML(f.groups, 'detail')}
     <div class="detail-title">${esc(f.name)}</div>
     <div class="detail-formula-expr">${esc(f.expression)}</div>
     ${f.units ? `<div class="detail-section"><div class="detail-label">Units</div><div class="detail-body">${esc(f.units)}</div></div>` : ''}
@@ -1413,10 +2113,12 @@ function openFormulaDetail(id) {
 function renderExams() {
   const el = document.getElementById('main-content');
   const q  = (document.getElementById('search-input')?.value||'').toLowerCase().trim();
+  const g  = (document.getElementById('group-filter')?.value||'').trim();
   const items = getSorted(state.exams.filter(e => {
     if (state.subject !== 'all' && e.subject !== state.subject) return false;
+    if (g && !(e.groups||[]).includes(g)) return false;
     if (!q) return true;
-    return [e.title, e.type, e.criteria].join(' ').toLowerCase().includes(q);
+    return [e.title, e.type, e.criteria, ...(e.groups||[])].join(' ').toLowerCase().includes(q);
   }));
 
   if (!state.exams.length) {
@@ -1435,6 +2137,7 @@ function renderExams() {
             <span style="font-size:10px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:${tc};background:${tc}18;padding:2px 8px;border-radius:20px;">${esc(e.type)}</span>
             <span class="card-sub ${e.subject}" style="margin:0;">${SUBJECT_NAMES[e.subject]||e.subject}</span>
           </div>
+          ${groupChipsHTML(e.groups)}
           <div class="card-title">${esc(e.title)}</div>
           ${e.criteria ? `<div class="card-preview">${esc(stripMd(e.criteria))}</div>` : ''}
           <div class="card-footer">
@@ -1466,7 +2169,7 @@ function openAddExam(prefill={}) {
     </div>
     <div class="form-row">
       <label>Subject</label>
-      <select id="f-sub">${subjectOpts(prefill.subject || (state.subject !== 'all' ? state.subject : 'jpn'))}</select>
+      <select id="f-sub">${subjectOpts(prefill.subject || (state.subject !== 'all' ? state.subject : (state.subjects[0]||'eng')))}</select>
     </div>
     <div class="form-row">
       <label>Exam Type</label>
@@ -1480,12 +2183,19 @@ function openAddExam(prefill={}) {
       <label>Marking Criteria and Note</label>
       <textarea id="f-criteria" style="min-height:150px;" placeholder="Enter each criterion, marks awarded, and key points, together with prep notes, strategy, and time-management tips...">${esc(prefill.criteria||'')}</textarea>
     </div>
+    <div class="form-row">
+      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
+      <div class="tag-input-box" id="f-group-box">
+        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveExam('${prefill.id||''}')">Save</button>
     </div>
   `);
   document.getElementById('f-title').focus();
+  initTagInput('f-group-box', prefill.groups);
 }
 
 function saveExam(editId) {
@@ -1497,6 +2207,7 @@ function saveExam(editId) {
     type:     document.getElementById('f-type').value,
     title,
     criteria: document.getElementById('f-criteria').value.trim(),
+    groups:    readTagBox('f-group-box'),
     date:     editId ? (state.exams.find(e=>e.id===editId)||{}).date||today() : today(),
   };
   if (editId) { const i=state.exams.findIndex(e=>e.id===editId); if(i>-1) state.exams[i]=item; }
@@ -1526,6 +2237,7 @@ function openExamDetail(id) {
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:0.6rem;">
       <span class="detail-sub-badge">${SUBJECT_NAMES[e.subject]||e.subject}</span>
       <span class="detail-sub-badge" style="background:var(--accent-light);color:var(--accent);">${esc(e.type)}</span>
+      ${groupChipsHTML(e.groups, 'detail')}
     </div>
     <div class="detail-title">${esc(e.title)}</div>
     ${e.criteria ? `<div class="detail-section"><div class="detail-label">Marking Criteria and Note</div><div class="detail-body">${md(e.criteria)}</div></div>` : ''}
@@ -1543,8 +2255,136 @@ function openExamDetail(id) {
 
 
 // ─────────────────────────────────────────────
-// Text formatting toolbar
+// Others tab — catch-all for miscellaneous notes, links, and reference items
 // ─────────────────────────────────────────────
+function renderOthers() {
+  const el = document.getElementById('main-content');
+  const q  = (document.getElementById('search-input')?.value||'').toLowerCase().trim();
+  const g  = (document.getElementById('group-filter')?.value||'').trim();
+  const items = getSorted(state.others.filter(o => {
+    if (g && !(o.groups||[]).includes(g)) return false;
+    if (!q) return true;
+    return [o.title, o.body, o.url, ...(o.groups||[])].join(' ').toLowerCase().includes(q);
+  }));
+
+  if (!state.others.length) {
+    el.innerHTML = `<div class="empty"><i class="ti ti-folder"></i><p>Nothing here yet.<br>Press "Add" to add a miscellaneous note or reference.</p></div>`;
+    return;
+  }
+
+  const cards = items.length
+    ? items.map(o => `
+      <div class="card" data-id="${o.id}" onclick="openOtherDetail('${o.id}')">
+        <div class="card-stripe" style="background:#78909c"></div>
+        ${groupChipsHTML(o.groups)}
+        <div class="card-title">${esc(o.title)}</div>
+        ${o.body ? `<div class="card-preview">${esc(stripMd(o.body))}</div>` : ''}
+        ${o.url  ? `<div style="font-size:11px;color:var(--accent);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🔗 ${esc(o.url)}</div>` : ''}
+        <div class="card-footer">
+          <span class="card-date">${o.date||''}</span>
+          <div class="card-actions">
+            <button class="icon-btn" onclick="event.stopPropagation();openAddOther(state.others.find(x=>x.id==='${o.id}'))" title="Edit"><i class="ti ti-pencil"></i></button>
+            <button class="icon-btn del" onclick="event.stopPropagation();deleteOther('${o.id}')" title="Delete"><i class="ti ti-trash"></i></button>
+          </div>
+        </div>
+      </div>`)
+      .join('')
+    : `<div class="empty" style="grid-column:1/-1"><p>No results found</p></div>`;
+
+  el.innerHTML = `${state.sort==='manual'?DRAG_HINT:''}<div class="cards-grid" id="sortable-grid">
+    ${cards}
+    <button class="add-card" onclick="openAdd()"><i class="ti ti-plus"></i><span>Add</span></button>
+  </div>`;
+  enableDrag('others');
+}
+
+function openAddOther(prefill={}) {
+  const isEdit = !!prefill.id;
+  showModal(`
+    <div class="modal-header">
+      <h2>${isEdit ? 'Edit Item' : 'Add to Others'}</h2>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="form-row">
+      <label>Title *</label>
+      <input type="text" id="f-title" value="${esc(prefill.title||'')}" placeholder="e.g. Useful reference, Link to resource…" />
+    </div>
+    <div class="form-row">
+      <label>Body / Notes</label>
+      <textarea id="f-body" style="min-height:130px;" placeholder="Write anything here — notes, summaries, references…">${esc(prefill.body||'')}</textarea>
+    </div>
+    <div class="form-row">
+      <label>URL (optional)</label>
+      <input type="url" id="f-url" value="${esc(prefill.url||'')}" placeholder="https://…" />
+    </div>
+    <div class="form-row">
+      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to one or more groups</span></label>
+      <div class="tag-input-box" id="f-group-box">
+        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="Enter group name and press Enter" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveOther('${prefill.id||''}')">Save</button>
+    </div>
+  `);
+  document.getElementById('f-title').focus();
+  initTagInput('f-group-box', prefill.groups);
+}
+
+function saveOther(editId) {
+  const title = document.getElementById('f-title').value.trim();
+  if (!title) { document.getElementById('f-title').classList.add('error'); return; }
+  const item = {
+    id:     editId || uid(),
+    title,
+    body:   document.getElementById('f-body').value.trim(),
+    url:    document.getElementById('f-url').value.trim(),
+    groups: readTagBox('f-group-box'),
+    date:   editId ? (state.others.find(o=>o.id===editId)||{}).date||today() : today(),
+  };
+  if (editId) {
+    const idx = state.others.findIndex(o => o.id === editId);
+    if (idx !== -1) state.others[idx] = item; else state.others.push(item);
+  } else {
+    state.others.push(item);
+  }
+  save(); closeModal(); render();
+}
+
+function deleteOther(id) {
+  confirmDelete('Are you sure you want to delete this item? This cannot be undone.', () => {
+    state.others = state.others.filter(o => o.id !== id);
+    save(); render();
+  });
+}
+
+function openOtherDetail(id) {
+  const o = state.others.find(x => x.id === id); if (!o) return;
+  showModal(`
+    <div class="modal-header">
+      <div></div>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    ${groupChipsHTML(o.groups, 'detail') ? `<div style="margin-bottom:.6rem;">${groupChipsHTML(o.groups,'detail')}</div>` : ''}
+    <div class="detail-title">${esc(o.title)}</div>
+    ${o.body ? `<div class="detail-section"><div class="detail-body">${md(o.body)}</div></div>` : ''}
+    ${o.url  ? `<div class="detail-section"><div class="detail-label">Link</div>
+                  <a href="${esc(o.url)}" target="_blank" rel="noopener noreferrer"
+                     style="color:var(--accent);font-size:13.5px;word-break:break-all;">${esc(o.url)}</a></div>` : ''}
+    <hr class="modal-divider" />
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span style="font-size:12px;color:var(--text-3);">${o.date||''}</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-danger" onclick="deleteOther('${o.id}')"><i class="ti ti-trash"></i> Delete</button>
+        <button class="btn" onclick="closeModal();openAddOther(state.others.find(x=>x.id==='${o.id}'))"><i class="ti ti-pencil"></i> Edit</button>
+        <button class="btn btn-primary" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  `);
+}
+
+
 function fmtWrap(marker, taId) {
   const ta = document.getElementById(taId);
   if (!ta) return;
@@ -1584,14 +2424,15 @@ function showModal(html) {
   const c = document.getElementById('modal-container');
   c.innerHTML = `<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`;
   injectToolbars();
+  const dl = document.getElementById('group-suggestions');
+  if (dl) dl.innerHTML = allGroups().map(g => `<option value="${esc(g)}"></option>`).join('');
 }
 
 function closeModal() {
   document.getElementById('modal-container').innerHTML = '';
 }
 
-// Keyboard shortcut: Escape to close modal (only closes in-app modals — the
-// auth screen isn't in #modal-container, so this can't be used to skip login)
+// Keyboard shortcut: Escape to close modal
 document.addEventListener('keydown', e => {
   if (e.key==='Escape') closeModal();
 });
@@ -1601,12 +2442,14 @@ document.addEventListener('keydown', e => {
 // ─────────────────────────────────────────────
 function exportData() {
   const data = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
+    subjects: state.subjects,
     cases:    state.cases,
     vocabs:   state.vocabs,
     formulas: state.formulas,
     exams:    state.exams,
+    others:   state.others,
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
@@ -1679,268 +2522,38 @@ function doImport(data, mode) {
     state.vocabs   = data.vocabs   || [];
     state.formulas = data.formulas || [];
     state.exams    = data.exams    || [];
+    state.others   = data.others   || [];
+    if (Array.isArray(data.subjects) && data.subjects.length) state.subjects = data.subjects;
   } else {
     const existingCaseIds    = new Set(state.cases.map(c => c.id));
     const existingVocabIds   = new Set(state.vocabs.map(v => v.id));
     const existingFormulaIds = new Set(state.formulas.map(f => f.id));
     const existingExamIds    = new Set(state.exams.map(e => e.id));
+    const existingOtherIds   = new Set(state.others.map(o => o.id));
     (data.cases    || []).forEach(c => { if (!existingCaseIds.has(c.id))    state.cases.push(c);    });
     (data.vocabs   || []).forEach(v => { if (!existingVocabIds.has(v.id))   state.vocabs.push(v);   });
     (data.formulas || []).forEach(f => { if (!existingFormulaIds.has(f.id)) state.formulas.push(f); });
     (data.exams    || []).forEach(e => { if (!existingExamIds.has(e.id))    state.exams.push(e);    });
+    (data.others   || []).forEach(o => { if (!existingOtherIds.has(o.id))   state.others.push(o);   });
+    if (Array.isArray(data.subjects)) {
+      data.subjects.forEach(k => { if (!state.subjects.includes(k)) state.subjects.push(k); });
+    }
   }
   migrateExams();
+  migrateGroups();
   save();
   closeModal();
   render();
 }
 
 // ─────────────────────────────────────────────
-// Init (data itself now loads after login — see the Firebase block below)
+// Init
 // ─────────────────────────────────────────────
+// ── Init ───────────────────────────────────────────────────
+// onAuthStateChanged (above) drives data loading after sign-in.
+// We just initialise the UI chrome here so it's ready before auth resolves.
 applySortButton();
-</script>
-
-<!-- ══════════════════════════════════════════════════════════
-     Firebase: Authentication + Firestore sync
-     ══════════════════════════════════════════════════════════ -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import { getAnalytics, isSupported as analyticsIsSupported } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-analytics.js";
-  import {
-    initializeAuth,
-    indexedDBLocalPersistence,
-    browserLocalPersistence,
-    inMemoryPersistence,
-    onAuthStateChanged,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    signOut,
-    sendPasswordResetEmail
-  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-  import {
-    getFirestore,
-    doc,
-    getDoc,
-    setDoc,
-    onSnapshot,
-    serverTimestamp
-  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-
-  // Values like apiKey are meant to be public and are safe to embed directly
-  // in the HTML — actual access control happens in Firestore Security Rules.
-  const firebaseConfig = {
-    apiKey: "AIzaSyAI1RdaXEBfxHUOmJtEpELN5uVWZdNKXeA",
-    authDomain: "ibstudy-notebook.firebaseapp.com",
-    projectId: "ibstudy-notebook",
-    storageBucket: "ibstudy-notebook.firebasestorage.app",
-    messagingSenderId: "546390368913",
-    appId: "1:546390368913:web:18e083125a9f156ff35530",
-    measurementId: "G-PSXLFPFQ2Z"
-  };
-
-  const app  = initializeApp(firebaseConfig);
-  // Mobile Safari (and some in-app browsers, especially in Private Browsing)
-  // have a known bug where Firebase Auth's default IndexedDB persistence
-  // hangs forever with no error — this is exactly the "connection failed"
-  // timeout you keep seeing. Falling back through localStorage, then plain
-  // in-memory storage, means login still completes even where IndexedDB is
-  // broken (in-memory just won't survive a page reload).
-  const auth = initializeAuth(app, {
-    persistence: [indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence]
-  });
-  const db   = getFirestore(app);
-
-  // Analytics is optional and unrelated to login/sync — guarded so a blocked
-  // or unsupported environment (ad blockers, some in-app browsers) can never
-  // break authentication.
-  analyticsIsSupported().then(ok => { if (ok) { try { getAnalytics(app); } catch(e) {} } }).catch(()=>{});
-
-  let currentUID = null;
-  let unsubscribeSnapshot = null;
-  let suppressNextSnapshotRender = false;
-
-  const AUTH_ERROR_MESSAGES = {
-    'auth/invalid-email':        'That email address doesn\'t look valid.',
-    'auth/user-not-found':       'No account found for that email. Try "Sign Up" instead.',
-    'auth/wrong-password':       'Incorrect password.',
-    'auth/invalid-credential':   'Incorrect email or password.',
-    'auth/email-already-in-use': 'That email is already registered. Try "Log In" instead.',
-    'auth/weak-password':        'Password must be at least 6 characters.',
-    'auth/too-many-requests':    'Too many attempts. Please try again later.',
-  };
-
-  const authStatusEl = document.getElementById('authStatus');
-  const authErrorEl  = document.getElementById('authError');
-  const loginBtnEl   = document.getElementById('authLoginBtn');
-  const signupBtnEl  = document.getElementById('authSignupBtn');
-
-  function showAuthError(err) {
-    authErrorEl.textContent = AUTH_ERROR_MESSAGES[err.code] || `Error: ${err.message}`;
-    authErrorEl.classList.remove('hidden');
-  }
-  function clearAuthError() { authErrorEl.classList.add('hidden'); }
-  function setAuthBusy(busy) { loginBtnEl.disabled = busy; signupBtnEl.disabled = busy; }
-
-  // Buttons start disabled (see HTML) so a slow or failed load never looks
-  // like an unresponsive tap.
-  function markReady() {
-    authStatusEl.classList.add('hidden');
-    loginBtnEl.disabled = false;
-    signupBtnEl.disabled = false;
-  }
-  function markFailed(message) {
-    authStatusEl.classList.add('hidden');
-    authErrorEl.textContent = message;
-    authErrorEl.classList.remove('hidden');
-    loginBtnEl.disabled = true;
-    signupBtnEl.disabled = true;
-  }
-
-  // Persistent banner for Firestore (data sync) problems — stays on screen
-  // until dismissed, unlike a toast, so the exact error text is readable.
-  function showSyncError(message) {
-    document.getElementById('syncErrorText').textContent = 'Sync error: ' + message;
-    document.getElementById('syncErrorBanner').classList.remove('hidden');
-  }
-  function clearSyncError() {
-    document.getElementById('syncErrorBanner').classList.add('hidden');
-  }
-
-  const readinessTimeout = setTimeout(() => {
-    markFailed('Could not connect to the login service. Check your internet connection and reload the page.');
-  }, 8000);
-
-  window.addEventListener('error', (e) => {
-    markFailed('A script failed to load (' + (e.message || 'unknown error') + '). Try reloading the page.');
-  });
-  window.addEventListener('unhandledrejection', (e) => {
-    markFailed('Something went wrong (' + (e.reason?.message || e.reason || 'unknown error') + '). Try reloading the page.');
-  });
-
-  window.handleLogin = async function() {
-    clearAuthError();
-    const email = document.getElementById('authEmail').value.trim();
-    const pass  = document.getElementById('authPassword').value;
-    if (!email || !pass) { showAuthError({code:'', message:'Please enter your email and password.'}); return; }
-    setAuthBusy(true);
-    try {
-      await signInWithEmailAndPassword(auth, email, pass);
-      // onAuthStateChanged handles the screen switch from here
-    } catch (err) {
-      showAuthError(err);
-    } finally {
-      setAuthBusy(false);
-    }
-  };
-
-  window.handleSignup = async function() {
-    clearAuthError();
-    const email = document.getElementById('authEmail').value.trim();
-    const pass  = document.getElementById('authPassword').value;
-    if (!email || !pass) { showAuthError({code:'', message:'Please enter your email and password.'}); return; }
-    setAuthBusy(true);
-    try {
-      await createUserWithEmailAndPassword(auth, email, pass);
-    } catch (err) {
-      showAuthError(err);
-    } finally {
-      setAuthBusy(false);
-    }
-  };
-
-  window.handleForgotPassword = async function() {
-    clearAuthError();
-    const email = document.getElementById('authEmail').value.trim();
-    if (!email) { showAuthError({code:'', message:'Please enter your email first.'}); return; }
-    try {
-      await sendPasswordResetEmail(auth, email);
-      alert('Password reset email sent.');
-    } catch (err) {
-      showAuthError(err);
-    }
-  };
-
-  window.handleLogout = async function() {
-    await signOut(auth);
-  };
-
-  // Writes to Firestore — called from the app's own save() function.
-  window.persistToCloud = async function() {
-    if (!currentUID) return;
-    suppressNextSnapshotRender = true; // avoid a flicker from re-rendering our own write
-    try {
-      await setDoc(doc(db, 'users', currentUID), {
-        cases: state.cases,
-        vocabs: state.vocabs,
-        formulas: state.formulas,
-        exams: state.exams,
-        updatedAt: serverTimestamp()
-      });
-      clearSyncError();
-    } catch (err) {
-      showSyncError(err.message + (err.code ? ' (' + err.code + ')' : ''));
-    }
-  };
-
-  async function startSessionFor(user) {
-    currentUID = user.uid;
-
-    document.getElementById('authOverlay').classList.add('hidden');
-    document.getElementById('appLayout').classList.remove('hidden');
-    document.getElementById('userEmail').textContent = user.email;
-
-    const ref = doc(db, 'users', currentUID);
-
-    // Initial load, wrapped in try/catch: an error here (Firestore database
-    // not created yet, or security rules denying access) used to fail
-    // silently — the app would just show up empty with no explanation.
-    try {
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        applyCloudData(snap.data());
-      } else {
-        // First login: create an empty document
-        await setDoc(ref, { cases:[], vocabs:[], formulas:[], exams:[], updatedAt: serverTimestamp() });
-        applyCloudData({});
-      }
-      clearSyncError();
-    } catch (err) {
-      showSyncError(err.message + (err.code ? ' (' + err.code + ')' : ''));
-      return; // don't attach a listener on top of a broken initial load
-    }
-
-    // Reflect changes from other devices in real time. The third argument is
-    // an error callback — without it, a permission/connection problem here
-    // would also fail completely silently.
-    unsubscribeSnapshot = onSnapshot(ref, (docSnap) => {
-      if (suppressNextSnapshotRender) { suppressNextSnapshotRender = false; return; }
-      if (docSnap.exists()) applyCloudData(docSnap.data());
-      clearSyncError();
-    }, (err) => {
-      showSyncError(err.message + (err.code ? ' (' + err.code + ')' : ''));
-    });
-  }
-
-  function endSession() {
-    currentUID = null;
-    if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
-    state.cases = []; state.vocabs = []; state.formulas = []; state.exams = [];
-
-    document.getElementById('appLayout').classList.add('hidden');
-    document.getElementById('authEmail').value = '';
-    document.getElementById('authPassword').value = '';
-    clearAuthError();
-    clearSyncError();
-    document.getElementById('authOverlay').classList.remove('hidden');
-  }
-
-  onAuthStateChanged(auth, (user) => {
-    clearTimeout(readinessTimeout);
-    markReady();
-    if (user) startSessionFor(user);
-    else endSession();
-  });
+render(); // renders empty state; real data arrives via loadFromFirestore()
 </script>
 </body>
 </html>
