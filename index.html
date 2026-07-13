@@ -2,18 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
 <title>IB Study Notebook</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/tabler-icons.min.css" />
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
-
-<!-- ── Firebase v10 (compat CDN — works without a bundler) ── -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -53,6 +47,8 @@
     min-height: 100vh;
     line-height: 1.6;
   }
+
+  .hidden { display: none !important; }
 
   /* ── Layout ── */
   .layout { display: flex; min-height: 100vh; }
@@ -263,6 +259,7 @@
     white-space: nowrap;
   }
   .btn:hover { background: var(--bg); }
+  .btn:disabled { opacity: .5; cursor: default; }
   .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   .btn-primary:hover { background: #1e3d80; border-color: #1e3d80; }
   .btn-danger { color: #c0392b; border-color: rgba(192,57,43,0.25); background: rgba(192,57,43,0.04); }
@@ -570,16 +567,19 @@
     position: fixed; inset: 0; z-index: 9999;
     display: flex; align-items: center; justify-content: center;
     background: var(--bg);
+    overflow-y: auto; padding: 20px;
   }
   .auth-card {
     background: var(--card); border: 1px solid var(--border);
     border-radius: 16px; padding: 44px 40px 40px;
     width: 100%; max-width: 380px; text-align: center;
     box-shadow: 0 8px 40px rgba(0,0,0,.09);
+    margin: auto;
   }
   .auth-logo { font-size: 32px; margin-bottom: 10px; }
   .auth-card h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
-  .auth-card .auth-sub { font-size: 13.5px; color: var(--text-2); margin-bottom: 28px; }
+  .auth-card .auth-sub { font-size: 13.5px; color: var(--text-2); margin-bottom: 20px; }
+  #auth-status { font-size: 12px; color: var(--text-3); margin-bottom: 18px; }
   .auth-divider {
     display: flex; align-items: center; gap: 10px;
     margin: 18px 0; color: var(--text-3); font-size: 12px;
@@ -602,6 +602,7 @@
     font-family: 'DM Sans', sans-serif;
   }
   .btn-google:hover { background: var(--bg); border-color: var(--accent); }
+  .btn-google:disabled { opacity: .5; cursor: default; }
   .btn-google svg { width: 18px; height: 18px; flex-shrink: 0; }
   .btn-auth-primary {
     width: 100%; padding: 10px; border: none; border-radius: 8px;
@@ -610,6 +611,7 @@
     transition: opacity .15s; margin-bottom: 8px;
   }
   .btn-auth-primary:hover { opacity: .88; }
+  .btn-auth-primary:disabled { opacity: .5; cursor: default; }
   .auth-toggle { font-size: 13px; color: var(--text-2); margin-top: 12px; }
   .auth-toggle a { color: var(--accent); cursor: pointer; text-decoration: none; font-weight: 500; }
   .auth-toggle a:hover { text-decoration: underline; }
@@ -617,6 +619,7 @@
     font-size: 13px; color: #e53e3e; background: #fff0f0;
     border: 1px solid #fca5a5; border-radius: 8px;
     padding: 8px 12px; margin-bottom: 10px; display: none;
+    text-align: left; line-height: 1.5;
   }
   #auth-screen.hidden { display: none; }
 
@@ -650,8 +653,25 @@
   .sync-dot.error   { background: #ef4444; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
+  /* ── Persistent sync-error banner ── */
+  #syncErrorBanner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 400;
+    background: #e53e3e; color: #fff; padding: 10px 20px; font-size: 12.5px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  #syncErrorBanner button {
+    background: none; border: none; color: #fff; text-decoration: underline;
+    cursor: pointer; font-size: 12px; font-family: 'DM Sans', sans-serif; flex-shrink: 0;
+  }
+</style>
 </head>
 <body>
+
+<!-- Persistent data-sync error banner (stays until dismissed, unlike a toast) -->
+<div id="syncErrorBanner" class="hidden">
+  <span id="syncErrorText"></span>
+  <button onclick="document.getElementById('syncErrorBanner').classList.add('hidden')">Dismiss</button>
+</div>
 
 <!-- ── Auth / Login screen ─────────────────────────────── -->
 <div id="auth-screen">
@@ -659,9 +679,10 @@
     <div class="auth-logo">📚</div>
     <h1>IB Study Notebook</h1>
     <p class="auth-sub">Sign in to sync your notes across devices</p>
+    <p id="auth-status">Connecting…</p>
 
     <!-- Google sign-in -->
-    <button class="btn-google" onclick="signInWithGoogle()">
+    <button class="btn-google" id="auth-google-btn" onclick="signInWithGoogle()" disabled>
       <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
       Continue with Google
     </button>
@@ -674,7 +695,7 @@
            autocomplete="email" onkeydown="if(event.key==='Enter')authSubmit()" />
     <input class="auth-input" id="auth-password" type="password" placeholder="Password"
            autocomplete="current-password" onkeydown="if(event.key==='Enter')authSubmit()" />
-    <button class="btn-auth-primary" id="auth-submit-btn" onclick="authSubmit()">Sign In</button>
+    <button class="btn-auth-primary" id="auth-submit-btn" onclick="authSubmit()" disabled>Sign In</button>
 
     <div class="auth-toggle" id="auth-toggle-text">
       Don't have an account? <a onclick="toggleAuthMode()">Sign up</a>
@@ -792,71 +813,20 @@
 
 <script>
 // ═════════════════════════════════════════════
-// Firebase configuration
+// Firebase: Authentication + Firestore sync
+// The actual Firebase SDK calls live in the <script type="module"> block
+// at the bottom of this file — modules keep their own scope and need the
+// modern modular SDK (loaded from CDN there). This section only holds
+// plain UI/state glue that the module script calls into, plus the app's
+// own save()/load() helpers now wired to the cloud instead of
+// localStorage-only.
 // ─────────────────────────────────────────────
-// Replace the values below with your own Firebase project settings.
-// Get them from: Firebase Console → Project Settings → Your apps → SDK setup.
-// ─────────────────────────────────────────────
-const FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyAI1RdaXEBfxHUOmJtEpELN5uVWZdNKXeA",
-  authDomain:        "ibstudy-notebook.firebaseapp.com",
-  projectId:         "ibstudy-notebook",
-  storageBucket:     "ibstudy-notebook.firebasestorage.app",
-  messagingSenderId: "546390368913",
-  appId:             "1:546390368913:web:18e083125a9f156ff35530",
-  measurementId:     "G-PSXLFPFQ2Z",
-};
-
-// ── Firebase init ──────────────────────────────────────────
-// Wrapped in try/catch so that if the SDK hasn't loaded (e.g. opened as
-// a local file:// or CDN blocked), the app still runs in localStorage mode.
-let fbAuth = null, fbDb = null, fbAnalytics = null;
-let _firebaseReady = false;
-
-try {
-  firebase.initializeApp(FIREBASE_CONFIG);
-  fbAuth      = firebase.auth();
-  fbDb        = firebase.firestore();
-  try { fbAnalytics = firebase.analytics(); } catch(e) { /* analytics optional */ }
-  _firebaseReady = true;
-} catch (e) {
-  console.warn('Firebase failed to initialise — running in offline (localStorage) mode.', e);
-}
-
-// ── Auth state ─────────────────────────────────────────────
 let currentUser = null;
 let authMode    = 'signin';
 
-function onUserSignedIn(user) {
-  currentUser = user;
-  document.getElementById('auth-screen').classList.add('hidden');
-  updateUserWidget(user);
-  loadFromFirestore();
-}
-
-function onUserSignedOut() {
-  currentUser = null;
-  updateUserWidget(null);
-  document.getElementById('auth-screen').classList.remove('hidden');
-  state.cases = []; state.vocabs = []; state.formulas = [];
-  state.exams = []; state.others = []; state.subjects = [...DEFAULT_SUBJECTS];
-  render();
-}
-
-if (_firebaseReady && fbAuth) {
-  fbAuth.onAuthStateChanged(user => {
-    if (user) onUserSignedIn(user);
-    else      onUserSignedOut();
-  });
-} else {
-  // No Firebase — skip login screen and go straight to localStorage mode
-  document.getElementById('auth-screen').classList.add('hidden');
-  document.getElementById('sync-label').textContent = 'Local only';
-  document.getElementById('sync-dot').style.background = '#aab2c0';
-}
-
 // ── User widget ────────────────────────────────────────────
 function updateUserWidget(user) {
+  currentUser = user;
   const avatarEl = document.getElementById('user-avatar');
   const nameEl   = document.getElementById('user-name');
   if (!user) {
@@ -876,18 +846,14 @@ function setSyncStatus(status) {
   const dot   = document.getElementById('sync-dot');
   const label = document.getElementById('sync-label');
   const map = {
-    synced:  ['',         'Synced'],
-    syncing: ['syncing',  'Saving…'],
-    error:   ['error',    'Error'],
-    offline: ['',         'Offline'],
+    synced:  ['',        'Synced'],
+    syncing: ['syncing', 'Saving…'],
+    error:   ['error',   'Error'],
+    offline: ['',        'Offline'],
   };
   const [cls, text] = map[status] || map.synced;
   dot.className = 'sync-dot' + (cls ? ' '+cls : '');
   label.textContent = text;
-  dot.style.background = status === 'synced'  ? '#22c55e'
-                       : status === 'syncing' ? '#f59e0b'
-                       : status === 'error'   ? '#ef4444'
-                       :                        '#aab2c0';
 }
 
 function openUserMenu() {
@@ -915,14 +881,7 @@ function openUserMenu() {
   `);
 }
 
-// ── Google sign-in ─────────────────────────────────────────
-function signInWithGoogle() {
-  if (!fbAuth) { showAuthError('Firebase is not available in this environment.'); return; }
-  const provider = new firebase.auth.GoogleAuthProvider();
-  fbAuth.signInWithPopup(provider).catch(err => showAuthError(err.message));
-}
-
-// ── Email / password ───────────────────────────────────────
+// ── Email / password mode toggle (pure UI, no Firebase needed) ──────
 function toggleAuthMode() {
   authMode = authMode === 'signin' ? 'signup' : 'signin';
   const isSignup = authMode === 'signup';
@@ -933,36 +892,9 @@ function toggleAuthMode() {
   document.getElementById('auth-error').style.display = 'none';
 }
 
-function authSubmit() {
-  if (!fbAuth) { showAuthError('Firebase is not available in this environment.'); return; }
-  const email    = document.getElementById('auth-email').value.trim();
-  const password = document.getElementById('auth-password').value;
-  if (!email || !password) { showAuthError('Please enter your email and password.'); return; }
-  if (authMode === 'signup') {
-    fbAuth.createUserWithEmailAndPassword(email, password)
-      .catch(err => showAuthError(friendlyAuthError(err.code)));
-  } else {
-    fbAuth.signInWithEmailAndPassword(email, password)
-      .catch(err => showAuthError(friendlyAuthError(err.code)));
-  }
-}
-
-function sendPasswordReset() {
-  if (!fbAuth) return;
-  const email = document.getElementById('auth-email').value.trim();
-  if (!email) { showAuthError('Enter your email address first.'); return; }
-  fbAuth.sendPasswordResetEmail(email)
-    .then(() => showAuthError('Password reset email sent — check your inbox.', 'info'))
-    .catch(err => showAuthError(friendlyAuthError(err.code)));
-}
-
-function signOutUser() {
-  closeModal();
-  if (fbAuth) fbAuth.signOut();
-}
-
 function showAuthError(msg, type='error') {
   const el = document.getElementById('auth-error');
+  if (!msg) { el.style.display = 'none'; return; }
   el.textContent = msg;
   el.style.display = 'block';
   el.style.color   = type === 'info' ? 'var(--accent)' : '#e53e3e';
@@ -974,55 +906,27 @@ function friendlyAuthError(code) {
   const map = {
     'auth/user-not-found':      'No account found with this email.',
     'auth/wrong-password':      'Incorrect password.',
+    'auth/invalid-credential':  'Incorrect email or password.',
     'auth/email-already-in-use':'This email is already registered.',
     'auth/invalid-email':       'Please enter a valid email address.',
     'auth/weak-password':       'Password must be at least 6 characters.',
     'auth/too-many-requests':   'Too many attempts. Please try again later.',
     'auth/popup-closed-by-user':'Sign-in popup was closed. Please try again.',
+    'auth/popup-blocked':       'Your browser blocked the sign-in popup. Please allow popups and try again.',
     'auth/network-request-failed': 'Network error. Check your connection.',
   };
   return map[code] || 'Sign-in failed. Please try again.';
 }
 
-// ── Firestore sync ─────────────────────────────────────────
-// All user data lives in a single document: users/{uid}/data/main
-// This keeps reads/writes simple and avoids per-collection rules complexity.
-let _saveTimer = null;
-
-function userDocRef() {
-  if (!currentUser || !fbDb) return null;
-  return fbDb.collection('users').doc(currentUser.uid).collection('data').doc('main');
-}
-
-async function loadFromFirestore() {
-  if (!currentUser || !fbDb) { load(); render(); return; }
-  setSyncStatus('syncing');
-  try {
-    const ref  = userDocRef();
-    const snap = await ref.get();
-    if (snap.exists) {
-      const d = snap.data();
-      state.cases    = d.cases    || [];
-      state.vocabs   = d.vocabs   || [];
-      state.formulas = d.formulas || [];
-      state.exams    = d.exams    || [];
-      state.others   = d.others   || [];
-      state.subjects = Array.isArray(d.subjects) && d.subjects.length ? d.subjects : [...DEFAULT_SUBJECTS];
-    } else {
-      // First sign-in: if there is localStorage data, offer to migrate it.
-      loadFromLocalStorage();
-      if (state.cases.length || state.vocabs.length || state.formulas.length ||
-          state.exams.length  || state.others.length) {
-        saveToFirestore(); // push local data up
-      }
-    }
-    migrateExams(); migrateGroups();
-    setSyncStatus('synced');
-  } catch (err) {
-    console.warn('Firestore load failed, falling back to localStorage:', err);
-    loadFromLocalStorage();
-    setSyncStatus('offline');
-  }
+// ── Cloud data load/apply (called by the module script below) ───────
+function applyCloudData(data) {
+  state.cases    = data.cases    || [];
+  state.vocabs   = data.vocabs   || [];
+  state.formulas = data.formulas || [];
+  state.exams    = data.exams    || [];
+  state.others   = data.others   || [];
+  state.subjects = Array.isArray(data.subjects) && data.subjects.length ? data.subjects : [...DEFAULT_SUBJECTS];
+  migrateExams(); migrateGroups();
   render();
 }
 
@@ -1038,24 +942,28 @@ function loadFromLocalStorage() {
   } catch(e) { state.subjects = [...DEFAULT_SUBJECTS]; }
 }
 
-async function saveToFirestore() {
-  if (!currentUser || !fbDb) return;
-  setSyncStatus('syncing');
-  try {
-    await userDocRef().set({
-      cases:    state.cases,
-      vocabs:   state.vocabs,
-      formulas: state.formulas,
-      exams:    state.exams,
-      others:   state.others,
-      subjects: state.subjects,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-    setSyncStatus('synced');
-  } catch (err) {
-    console.warn('Firestore save failed:', err);
-    setSyncStatus('error');
-  }
+let _saveTimer = null;
+
+function load() {
+  // Fallback only — the real load path is applyCloudData(), driven by the
+  // Firebase module script after sign-in.
+  loadFromLocalStorage();
+  migrateExams();
+  migrateGroups();
+}
+
+function save() {
+  // Local cache first, so a reload right after an edit (before the debounce
+  // below fires, or during a brief offline moment) doesn't lose anything.
+  localStorage.setItem('ib_cases',    JSON.stringify(state.cases));
+  localStorage.setItem('ib_vocabs',   JSON.stringify(state.vocabs));
+  localStorage.setItem('ib_formulas', JSON.stringify(state.formulas));
+  localStorage.setItem('ib_exams',    JSON.stringify(state.exams));
+  localStorage.setItem('ib_others',   JSON.stringify(state.others));
+  localStorage.setItem('ib_subjects', JSON.stringify(state.subjects));
+  // Debounce Firestore writes to avoid hammering on rapid edits.
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(saveToFirestore, 800);
 }
 
 // ─────────────────────────────────────────────
@@ -1141,13 +1049,6 @@ let state = {
   subjects: null,
 };
 
-function load() {
-  // Fallback only — main load path goes through loadFromFirestore() after auth.
-  loadFromLocalStorage();
-  migrateExams();
-  migrateGroups();
-}
-
 // One-time migration: the single-value "group" field was upgraded to a
 // "groups" array so each item can carry multiple tags. Convert any legacy
 // string value into a one-element array (or empty array if absent) so
@@ -1181,19 +1082,6 @@ function migrateExams() {
     }
   });
   if (changed) save();
-}
-
-function save() {
-  // Write to localStorage as offline cache.
-  localStorage.setItem('ib_cases',    JSON.stringify(state.cases));
-  localStorage.setItem('ib_vocabs',   JSON.stringify(state.vocabs));
-  localStorage.setItem('ib_formulas', JSON.stringify(state.formulas));
-  localStorage.setItem('ib_exams',    JSON.stringify(state.exams));
-  localStorage.setItem('ib_others',   JSON.stringify(state.others));
-  localStorage.setItem('ib_subjects', JSON.stringify(state.subjects));
-  // Debounce Firestore writes to avoid hammering on rapid edits.
-  if (_saveTimer) clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(saveToFirestore, 800);
 }
 
 function esc(s) {
@@ -2549,11 +2437,267 @@ function doImport(data, mode) {
 // ─────────────────────────────────────────────
 // Init
 // ─────────────────────────────────────────────
-// ── Init ───────────────────────────────────────────────────
-// onAuthStateChanged (above) drives data loading after sign-in.
-// We just initialise the UI chrome here so it's ready before auth resolves.
+// onAuthStateChanged (in the Firebase module script below) drives data
+// loading after sign-in. We just initialise the UI chrome here so it's
+// ready before auth resolves.
 applySortButton();
-render(); // renders empty state; real data arrives via loadFromFirestore()
+render(); // renders empty state; real data arrives via applyCloudData()
+</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     Firebase: Authentication + Firestore sync
+     ══════════════════════════════════════════════════════════ -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+  import { getAnalytics, isSupported as analyticsIsSupported } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-analytics.js";
+  import {
+    initializeAuth,
+    indexedDBLocalPersistence,
+    browserLocalPersistence,
+    inMemoryPersistence,
+    onAuthStateChanged,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut,
+    sendPasswordResetEmail,
+    GoogleAuthProvider,
+    signInWithPopup,
+    signInWithRedirect,
+    getRedirectResult
+  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    onSnapshot,
+    serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+  // Values like apiKey are meant to be public and are safe to embed directly
+  // in the HTML — actual access control happens in Firestore Security Rules.
+  const firebaseConfig = {
+    apiKey:            "AIzaSyAI1RdaXEBfxHUOmJtEpELN5uVWZdNKXeA",
+    authDomain:        "ibstudy-notebook.firebaseapp.com",
+    projectId:         "ibstudy-notebook",
+    storageBucket:     "ibstudy-notebook.firebasestorage.app",
+    messagingSenderId: "546390368913",
+    appId:             "1:546390368913:web:18e083125a9f156ff35530",
+    measurementId:     "G-PSXLFPFQ2Z"
+  };
+
+  const app = initializeApp(firebaseConfig);
+
+  // Mobile Safari (and some in-app browsers, especially in Private Browsing)
+  // have a known bug where Firebase Auth's default IndexedDB persistence
+  // hangs forever with no error. Falling back through localStorage, then
+  // plain in-memory storage, means login still completes even where
+  // IndexedDB is broken (in-memory just won't survive a page reload).
+  const auth = initializeAuth(app, {
+    persistence: [indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence]
+  });
+  const db = getFirestore(app);
+
+  analyticsIsSupported().then(ok => { if (ok) { try { getAnalytics(app); } catch(e) {} } }).catch(()=>{});
+
+  let currentUID = null;
+  let unsubscribeSnapshot = null;
+  let suppressNextSnapshotRender = false;
+
+  const authStatusEl = document.getElementById('auth-status');
+  const submitBtnEl  = document.getElementById('auth-submit-btn');
+  const googleBtnEl  = document.getElementById('auth-google-btn');
+
+  // Buttons start disabled (see HTML) so a slow or failed load never looks
+  // like an unresponsive tap.
+  function markReady() {
+    if (authStatusEl) authStatusEl.style.display = 'none';
+    submitBtnEl.disabled = false;
+    googleBtnEl.disabled = false;
+  }
+  function markFailed(message) {
+    if (authStatusEl) authStatusEl.style.display = 'none';
+    showAuthError(message);
+    submitBtnEl.disabled = true;
+    googleBtnEl.disabled = true;
+  }
+
+  // Persistent banner for Firestore (data sync) problems — stays on screen
+  // until dismissed, unlike a toast, so the exact error text is readable.
+  function showSyncError(message) {
+    document.getElementById('syncErrorText').textContent = 'Sync error: ' + message;
+    document.getElementById('syncErrorBanner').classList.remove('hidden');
+  }
+  function clearSyncError() {
+    document.getElementById('syncErrorBanner').classList.add('hidden');
+  }
+
+  const readinessTimeout = setTimeout(() => {
+    markFailed('Could not connect to the login service. Check your internet connection and reload the page.');
+  }, 8000);
+
+  window.addEventListener('error', (e) => {
+    markFailed('A script failed to load (' + (e.message || 'unknown error') + '). Try reloading the page.');
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    markFailed('Something went wrong (' + (e.reason?.message || e.reason || 'unknown error') + '). Try reloading the page.');
+  });
+
+  const isMobileUA = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+  window.authSubmit = async function() {
+    showAuthError('');
+    const email    = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    if (!email || !password) { showAuthError('Please enter your email and password.'); return; }
+    submitBtnEl.disabled = true;
+    try {
+      if (authMode === 'signup') {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (err) {
+      showAuthError(friendlyAuthError(err.code));
+    } finally {
+      submitBtnEl.disabled = false;
+    }
+  };
+
+  window.signInWithGoogle = async function() {
+    const provider = new GoogleAuthProvider();
+    try {
+      // signInWithPopup is unreliable on mobile browsers (popups are often
+      // blocked, or the popup window behaves inconsistently in mobile
+      // Safari/Chrome/in-app browsers) — use a full-page redirect there
+      // instead, which is the pattern Firebase itself recommends for mobile.
+      if (isMobileUA()) {
+        await signInWithRedirect(auth, provider);
+      } else {
+        await signInWithPopup(auth, provider);
+      }
+    } catch (err) {
+      showAuthError(friendlyAuthError(err.code) || err.message);
+    }
+  };
+
+  // Completes sign-in after the mobile redirect flow brings the user back
+  // to this page. Harmless no-op on desktop / when there's no redirect.
+  getRedirectResult(auth).catch(err => {
+    if (err && err.code) showAuthError(friendlyAuthError(err.code));
+  });
+
+  window.sendPasswordReset = async function() {
+    const email = document.getElementById('auth-email').value.trim();
+    if (!email) { showAuthError('Enter your email address first.'); return; }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      showAuthError('Password reset email sent — check your inbox.', 'info');
+    } catch (err) {
+      showAuthError(friendlyAuthError(err.code));
+    }
+  };
+
+  window.signOutUser = async function() {
+    closeModal();
+    await signOut(auth);
+  };
+
+  // Writes to Firestore — called from the app's own save() function
+  // (debounced 800ms) and from the initial-migration path below.
+  window.saveToFirestore = async function() {
+    if (!currentUID) return;
+    suppressNextSnapshotRender = true; // avoid a flicker from re-rendering our own write
+    setSyncStatus('syncing');
+    try {
+      await setDoc(doc(db, 'users', currentUID, 'data', 'main'), {
+        cases: state.cases,
+        vocabs: state.vocabs,
+        formulas: state.formulas,
+        exams: state.exams,
+        others: state.others,
+        subjects: state.subjects,
+        updatedAt: serverTimestamp()
+      });
+      setSyncStatus('synced');
+      clearSyncError();
+    } catch (err) {
+      setSyncStatus('error');
+      showSyncError(err.message + (err.code ? ' (' + err.code + ')' : ''));
+    }
+  };
+
+  async function startSessionFor(user) {
+    currentUID = user.uid;
+    document.getElementById('auth-screen').classList.add('hidden');
+    updateUserWidget(user);
+
+    const ref = doc(db, 'users', currentUID, 'data', 'main');
+    setSyncStatus('syncing');
+
+    // Initial load, wrapped in try/catch: an error here (Firestore database
+    // not created yet, or security rules denying access) used to fail
+    // silently — the app would just show up empty with no explanation.
+    try {
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        applyCloudData(snap.data());
+      } else {
+        // First sign-in: migrate any existing localStorage data up, or
+        // start with the default subject set.
+        loadFromLocalStorage();
+        migrateExams(); migrateGroups();
+        const initial = {
+          cases: state.cases, vocabs: state.vocabs, formulas: state.formulas,
+          exams: state.exams, others: state.others, subjects: state.subjects,
+          updatedAt: serverTimestamp()
+        };
+        await setDoc(ref, initial);
+        render();
+      }
+      setSyncStatus('synced');
+      clearSyncError();
+    } catch (err) {
+      setSyncStatus('error');
+      showSyncError(err.message + (err.code ? ' (' + err.code + ')' : ''));
+      return; // don't attach a listener on top of a broken initial load
+    }
+
+    // Reflect changes from other devices in real time. The third argument is
+    // an error callback — without it, a permission/connection problem here
+    // would also fail completely silently. (This listener didn't exist in
+    // the previous version of this file, which is why other devices never
+    // saw updates without a manual sign-out/sign-in.)
+    unsubscribeSnapshot = onSnapshot(ref, (docSnap) => {
+      if (suppressNextSnapshotRender) { suppressNextSnapshotRender = false; return; }
+      if (docSnap.exists()) applyCloudData(docSnap.data());
+      clearSyncError();
+    }, (err) => {
+      setSyncStatus('error');
+      showSyncError(err.message + (err.code ? ' (' + err.code + ')' : ''));
+    });
+  }
+
+  function endSession() {
+    currentUID = null;
+    if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    updateUserWidget(null);
+    document.getElementById('auth-email').value = '';
+    document.getElementById('auth-password').value = '';
+    showAuthError('');
+    clearSyncError();
+    document.getElementById('auth-screen').classList.remove('hidden');
+    state.cases = []; state.vocabs = []; state.formulas = [];
+    state.exams = []; state.others = []; state.subjects = [...DEFAULT_SUBJECTS];
+    render();
+  }
+
+  onAuthStateChanged(auth, (user) => {
+    clearTimeout(readinessTimeout);
+    markReady();
+    if (user) startSessionFor(user);
+    else endSession();
+  });
 </script>
 </body>
 </html>
