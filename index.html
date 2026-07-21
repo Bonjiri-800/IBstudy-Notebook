@@ -1415,7 +1415,11 @@ function recomputeMarqueeSelection() {
 let holdMove = null; // { groupIds, ghostEl, timer, active }
 
 document.addEventListener('contextmenu', e => {
-  if (e.target.closest('#sortable-grid .card')) e.preventDefault(); // we use right-click ourselves, not the browser menu
+  // Suppress the native browser menu anywhere in a card grid (cards, gaps
+  // between them, and the Add tile), and also if our own right-click
+  // gesture is currently in progress (covers edge cases where the mouse
+  // ends up outside the grid before the button is released).
+  if (e.target.closest('#sortable-grid') || holdMove) e.preventDefault();
 });
 
 document.addEventListener('mousedown', e => {
