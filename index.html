@@ -1227,13 +1227,14 @@ let state = {
 //
 // LEFT click (no drag):
 //   • on empty grid space / the "Add" tile → open the Add form
-//   • on a card that is NOT part of an active multi-selection → open that
-//     card's detail view (which has its own Edit / Delete buttons)
-//   • on a card that IS part of an active multi-selection (2+ selected)  →
-//     bulk-delete the whole selection (with a confirmation)
+//   • on any card → open that card's detail view (Edit / Delete live there)
 // LEFT click-and-DRAG (move past a small threshold), starting anywhere in
 // the grid (including on top of a card) → rubber-band (marquee) multi-
 // select; Shift adds to the existing selection instead of replacing it.
+// RIGHT click (quick, released before the hold delay, without moving away):
+//   • on a card that's part of an active multi-selection (2+) → delete the
+//     whole selection (with a confirmation)
+//   • on any other card → delete just that one card (with a confirmation)
 // RIGHT click-and-HOLD (~350ms without moving) on a card, in Manual sort
 // order → picks up that card (or the whole current selection, if the card
 // held is part of it) and lets you drop it at a new position.
@@ -1363,12 +1364,8 @@ function onLeftUp() {
 
   if (info.startedOnCard) {
     const id = info.startedOnCard.dataset.id;
-    if (selectionType === state.tab && selectedIds.size > 1 && selectedIds.has(id)) {
-      bulkDeleteSelected();               // clicking inside the highlighted selection deletes it all
-    } else {
-      clearSelection();
-      openDetailForCurrentTab(id);        // normal click → that card's edit/delete view
-    }
+    clearSelection();
+    openDetailForCurrentTab(id);        // left click always opens that card's edit/delete view
     return;
   }
 
@@ -1410,27 +1407,32 @@ function recomputeMarqueeSelection() {
   updateBulkBar();
 }
 
-// ── Right button: press-and-hold on a card → move it (or the whole
-// current selection, if the held card belongs to it) ──
+// ── Right button: a quick right-click DELETES (the whole selection if the
+// card clicked belongs to one, otherwise just that single card). Holding
+// the right button down instead MOVES (the selection, or just that one
+// card) — see HOLD_MOVE_DELAY. Releasing before the hold delay elapses,
+// without having moved away, is what counts as "quick". ──
 let holdMove = null; // { groupIds, ghostEl, timer, active }
 
 document.addEventListener('contextmenu', e => {
-  if (e.target.closest('#sortable-grid .card')) e.preventDefault(); // we use right-click for moving, not a menu
+  if (e.target.closest('#sortable-grid .card')) e.preventDefault(); // we use right-click ourselves, not the browser menu
 });
 
 document.addEventListener('mousedown', e => {
   if (e.button !== 2) return;
-  if (state.sort !== 'manual') return; // reordering only makes sense in Manual order
   const cardEl = e.target.closest('.card');
   if (!cardEl || e.target.closest('.add-card')) return;
   if (e.target.closest(INTERACTIVE_SELECTOR)) return;
+  e.preventDefault();
   const id = cardEl.dataset.id;
-  const groupIds = (selectionType === state.tab && selectedIds.size > 1 && selectedIds.has(id))
-    ? [...selectedIds]
-    : [id];
+  const isPartOfSelection = selectionType === state.tab && selectedIds.size > 1 && selectedIds.has(id);
+  const groupIds = isPartOfSelection ? [...selectedIds] : [id];
+  const canMove = state.sort === 'manual'; // reordering only makes sense in Manual order
   const startX = e.clientX, startY = e.clientY;
   holdMove = { groupIds, active: false, ghostEl: null, timer: null };
-  holdMove.timer = setTimeout(() => beginHoldMove(startX, startY), HOLD_MOVE_DELAY);
+  if (canMove) {
+    holdMove.timer = setTimeout(() => beginHoldMove(startX, startY), HOLD_MOVE_DELAY);
+  }
   document.addEventListener('mousemove', onHoldMove);
   document.addEventListener('mouseup', onHoldUp, { once: true });
 
@@ -1438,6 +1440,8 @@ document.addEventListener('mousedown', e => {
     if (!holdMove) return;
     if (!holdMove.active) {
       if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > CLICK_MOVE_THRESHOLD) {
+        // moved before the hold delay elapsed → cancel the gesture entirely
+        // (neither a "quick click" delete nor a move should happen)
         clearTimeout(holdMove.timer);
         cleanupHoldMove();
       }
@@ -1449,11 +1453,38 @@ document.addEventListener('mousedown', e => {
   function onHoldUp(ev) {
     document.removeEventListener('mousemove', onHoldMove);
     if (!holdMove) return;
+    const wasActive = holdMove.active;
+    const idsForThisGesture = holdMove.groupIds;
     clearTimeout(holdMove.timer);
-    if (holdMove.active) finalizeHoldMove(ev.clientX, ev.clientY);
+    if (wasActive) {
+      finalizeHoldMove(ev.clientX, ev.clientY);
+    } else {
+      rightClickDelete(idsForThisGesture);
+    }
     cleanupHoldMove();
   }
 });
+
+// A quick right-click (released before the hold delay, without moving away)
+// deletes: the whole multi-selection if the card belonged to one, or just
+// that single card otherwise.
+function rightClickDelete(ids) {
+  if (ids.length > 1) {
+    bulkDeleteSelected();
+  } else {
+    clearSelection();
+    deleteItemForCurrentTab(ids[0]);
+  }
+}
+
+function deleteItemForCurrentTab(id) {
+  const t = state.tab;
+  if      (t === 'case')    deleteCase(id);
+  else if (t === 'vocab')   deleteVocab(id);
+  else if (t === 'formula') deleteFormula(id);
+  else if (t === 'exam')    deleteExam(id);
+  else if (t === 'others')  deleteOther(id);
+}
 
 function beginHoldMove(x, y) {
   if (!holdMove) return;
@@ -1908,7 +1939,7 @@ function readTagBox(boxId) {
 // ─────────────────────────────────────────────
 const TYPE_KEY = { case:'cases', vocab:'vocabs', formula:'formulas', exam:'exams', others:'others' };
 
-const DRAG_HINT = `<div class="drag-hint"><i class="ti ti-info-circle"></i> Click empty space to add · click a card to open/edit it · drag over empty space to select multiple · right-click and hold a card to move it (Manual order only)</div>`;
+const DRAG_HINT = `<div class="drag-hint"><i class="ti ti-info-circle"></i> Click empty space to add · click a card to open/edit it · drag to select multiple · right-click a card (or a selection) to delete it · right-click and hold to move it (Manual order only)</div>`;
 
 function render() {
   updateStats();
