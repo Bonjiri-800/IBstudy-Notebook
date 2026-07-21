@@ -358,7 +358,6 @@
     overflow-x: auto; overflow-y: hidden;
     white-space: nowrap;
   }
-  .formula-expr .ML__base { color: var(--accent); }
   .formula-desc  { font-size: 12.5px; color: var(--text-2); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .formula-unit  { font-size: 11.5px; color: var(--text-3); margin-top: 5px; }
   .detail-formula-expr {
@@ -368,7 +367,24 @@
     padding: 16px 18px; margin-bottom: 1.1rem;
     overflow-x: auto;
   }
-  .detail-formula-expr .ML__base { color: var(--accent); }
+  /* Read-only display math-fields (card preview + detail): strip the
+     editable field's chrome so it looks like static text, not an input. */
+  .formula-expr math-field,
+  .detail-formula-expr math-field {
+    display: inline-block;
+    width: auto;
+    min-height: 0;
+    border: none;
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    font-size: inherit;
+    --primary-color: currentColor;
+    --text-color: currentColor;
+  }
+  /* In the card grid, clicks should open the detail modal (the card's own
+     onclick), not focus the math-field — let them pass through. */
+  .formula-expr math-field { pointer-events: none; }
 
   .card-footer {
     display: flex; align-items: center; justify-content: space-between;
@@ -920,6 +936,8 @@
       <i class="ti ti-square-check"></i>
       <span id="bulk-count">0 selected</span>
       <span class="bulk-actions-spacer"></span>
+      <button class="btn" onclick="bulkMoveSelected('top')" title="Move all selected items to the top of the Manual order"><i class="ti ti-arrow-bar-to-up"></i> Move to Top</button>
+      <button class="btn" onclick="bulkMoveSelected('bottom')" title="Move all selected items to the bottom of the Manual order"><i class="ti ti-arrow-bar-to-down"></i> Move to Bottom</button>
       <button class="btn" onclick="clearSelection()"><i class="ti ti-x"></i> Clear</button>
       <button class="btn btn-danger" onclick="bulkDeleteSelected()"><i class="ti ti-trash"></i> Delete Selected</button>
     </div>
@@ -1180,7 +1198,8 @@ let state = {
 // rectangle; any card it overlaps gets selected (hold Shift to add to the
 // existing selection instead of replacing it). Selected cards can then be
 // bulk-deleted from the bar at the top, or — in Manual sort mode — dragged
-// together as a group (see the multiDrag wiring in enableDrag()).
+// together as a group (see regroupForMultiDrag() in enableDrag()), or
+// moved with the "Move to Top/Bottom" buttons in the bar.
 let selectedIds = new Set();
 let selectionType = null; // which tab ('case'|'vocab'|'formula'|'exam'|'others') the ids belong to
 
@@ -1219,6 +1238,23 @@ function bulkDeleteSelected() {
     clearSelection();
     save(); render();
   });
+}
+
+// Moves every selected item together to the top or bottom of the
+// underlying (Manual-order) array, keeping their relative order. This is a
+// reliable, non-drag way to bulk-move a selection; dragging any selected
+// card (in Manual sort mode) does the same thing to an arbitrary position —
+// see regroupForMultiDrag() in the drag-to-reorder section above.
+function bulkMoveSelected(where) {
+  if (!selectionType || !selectedIds.size) return;
+  const key = TYPE_KEY[selectionType];
+  const ids = new Set(selectedIds);
+  const arr = state[key];
+  const group = arr.filter(item => ids.has(item.id));
+  const rest  = arr.filter(item => !ids.has(item.id));
+  state[key] = where === 'top' ? [...group, ...rest] : [...rest, ...group];
+  save();
+  render();
 }
 
 let marqueeEl = null, marqueeStart = null, marqueeBase = new Set(), marqueeShift = false;
@@ -1339,14 +1375,16 @@ function md(s) {
 }
 
 // Renders a LaTeX string (as produced by the Formula Expression math-field)
-// into static, non-editable math markup for card previews and detail views.
-// Falls back to plain escaped text if the MathLive library hasn't loaded.
-function renderLatex(latex) {
+// as an actual read-only <math-field> for card previews and detail views.
+// This is the exact same component/renderer used while typing, so what was
+// shown at input time is guaranteed to be shown identically at display
+// time — no separate "markup converter" involved, and because <math-field>
+// renders inside its own Shadow DOM, this page's own CSS (line-height,
+// word-break, fonts, etc.) cannot leak in and distort the fraction layout
+// the way it could when raw math markup was injected directly into the page.
+function mathDisplayHTML(latex) {
   if (!latex) return '';
-  if (window.MathLive && typeof window.MathLive.convertLatexToMarkup === 'function') {
-    try { return window.MathLive.convertLatexToMarkup(latex); } catch(e) { /* fall through */ }
-  }
-  return esc(latex);
+  return `<math-field read-only readonly tabindex="-1" math-virtual-keyboard-policy="manual">${esc(latex)}</math-field>`;
 }
 
 function today() { return new Date().toISOString().slice(0,10); }
@@ -1666,19 +1704,30 @@ function readTagBox(boxId) {
 let sortableInstance = null;
 const TYPE_KEY = { case:'cases', vocab:'vocabs', formula:'formulas', exam:'exams', others:'others' };
 
-// MultiDrag lets dragging any one *selected* card move the whole selected
-// group together. It ships bundled in the Sortable.min.js build but has to
-// be mounted once before use. Guarded so the app still works (single-item
-// drag only) if the CDN build in use doesn't include it.
-if (typeof Sortable !== 'undefined' && Sortable.MultiDrag) {
-  try { Sortable.mount(new Sortable.MultiDrag()); } catch(e) {}
-}
-
 function destroySortable() {
   if (sortableInstance) {
     try { sortableInstance.destroy(); } catch(e) {}
     sortableInstance = null;
   }
+}
+
+// When several cards are selected (marquee) and the person drags ONE of
+// them, SortableJS only physically moves that single card — the rest of
+// the selected cards are still left in their old spots in `ids`. This
+// takes that raw post-drop order and reinserts every selected id as one
+// contiguous block at the position the dragged card landed at (measured
+// against the non-selected cards), so the whole group moves together.
+function regroupForMultiDrag(ids, draggedId, selected) {
+  if (!selected || selected.size <= 1 || !selected.has(draggedId)) return ids;
+  const draggedIdx = ids.indexOf(draggedId);
+  if (draggedIdx === -1) return ids;
+  const groupIds = ids.filter(id => selected.has(id));   // keep the group's own relative order
+  const restIds  = ids.filter(id => !selected.has(id));
+  let insertAt = 0;
+  for (let i = 0; i < draggedIdx; i++) {
+    if (!selected.has(ids[i])) insertAt++;
+  }
+  return [...restIds.slice(0, insertAt), ...groupIds, ...restIds.slice(insertAt)];
 }
 
 function enableDrag(type) {
@@ -1696,27 +1745,16 @@ function enableDrag(type) {
     ghostClass: 'sortable-ghost',
     chosenClass: 'sortable-chosen',
     dragClass: 'sortable-drag',
-    // Multi-drag: dragging any card that's part of the current marquee
-    // selection (see "Multi-select" section below) moves the whole group.
-    // multiDragKey is set to a key that's never pressed so SortableJS's own
-    // ctrl/cmd-click selection never kicks in — our marquee selection is
-    // the only way to build a multi-selection, avoiding double bookkeeping.
-    multiDrag: true,
-    selectedClass: 'card-selected',
-    multiDragKey: 'NeverTriggered',
-    onEnd: () => {
-      const ids = [...grid.querySelectorAll('.card')].map(el => el.dataset.id);
-      reorderByVisible(type, ids);
+    onEnd: (evt) => {
+      const rawIds = [...grid.querySelectorAll('.card')].map(el => el.dataset.id);
+      const draggedId = evt && evt.item ? evt.item.dataset.id : null;
+      const isGroupDrag = selectionType === type && selectedIds.size > 1 && draggedId && selectedIds.has(draggedId);
+      const finalIds = isGroupDrag ? regroupForMultiDrag(rawIds, draggedId, selectedIds) : rawIds;
+      reorderByVisible(type, finalIds);
       clearSelection();
+      if (isGroupDrag) render(); // DOM only reflects the single dragged card's move — re-render to show the whole group in its new spot
     }
   });
-  // Sync our own marquee-based selection into SortableJS's multi-drag
-  // bookkeeping so dragging one selected card carries the rest along.
-  if (Sortable.utils && Sortable.utils.select && selectionType === type) {
-    grid.querySelectorAll('.card').forEach(el => {
-      if (selectedIds.has(el.dataset.id)) Sortable.utils.select(el);
-    });
-  }
 }
 
 // Reorder the full array using the new order of the currently *visible* cards,
@@ -2144,7 +2182,7 @@ function renderFormulas() {
         <div class="card-sub ${f.subject}">${SUBJECT_NAMES[f.subject]||f.subject}</div>
         ${groupChipsHTML(f.groups)}
         <div class="formula-name">${esc(f.name)}</div>
-        <div class="formula-expr">${renderLatex(f.expression)}</div>
+        <div class="formula-expr">${mathDisplayHTML(f.expression)}</div>
         ${f.description ? `<div class="formula-desc">${esc(stripMd(f.description))}</div>` : ''}
         ${f.units ? `<div class="formula-unit">Units: ${esc(f.units)}</div>` : ''}
         <div class="card-footer">
@@ -2251,7 +2289,7 @@ function openFormulaDetail(id) {
     <span class="detail-sub-badge">${SUBJECT_NAMES[f.subject]||f.subject}</span>
     ${groupChipsHTML(f.groups, 'detail')}
     <div class="detail-title">${esc(f.name)}</div>
-    <div class="detail-formula-expr">${renderLatex(f.expression)}</div>
+    <div class="detail-formula-expr">${mathDisplayHTML(f.expression)}</div>
     ${f.units ? `<div class="detail-section"><div class="detail-label">Units</div><div class="detail-body">${esc(f.units)}</div></div>` : ''}
     ${f.description ? `<div class="detail-section"><div class="detail-label">Description / Variables</div><div class="detail-body">${md(f.description)}</div></div>` : ''}
     <hr class="modal-divider" />
