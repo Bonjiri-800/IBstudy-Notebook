@@ -275,6 +275,7 @@
     background: var(--accent-light); color: var(--accent);
     border-bottom: 1px solid var(--border);
     font-size: 13.5px; font-weight: 500;
+    position: sticky; top: 0; z-index: 6; /* stays visible under the topbar while scrolling, for as long as a selection is active */
   }
   .bulk-actions-bar.hidden { display: none; }
   .bulk-actions-bar i { font-size: 16px; }
@@ -1413,6 +1414,9 @@ function recomputeMarqueeSelection() {
 // card) — see HOLD_MOVE_DELAY. Releasing before the hold delay elapses,
 // without having moved away, is what counts as "quick". ──
 let holdMove = null; // { groupIds, ghostEl, timer, active }
+let lastHoldPointer = null; // { x, y } — kept updated so auto-scroll can keep recomputing the ghost/drop-target even without new mousemove events
+let autoScrollRAF = null;
+let autoScrollSpeed = 0; // signed px per animation frame; 0 = not scrolling
 
 document.addEventListener('contextmenu', e => {
   // Suppress the native browser menu anywhere in a card grid (cards, gaps
@@ -1451,8 +1455,10 @@ document.addEventListener('mousedown', e => {
       }
       return;
     }
+    lastHoldPointer = { x: ev.clientX, y: ev.clientY };
     moveGhost(ev.clientX, ev.clientY);
     updateDropTarget(ev.clientX, ev.clientY);
+    updateAutoScroll(ev.clientY);
   }
   function onHoldUp(ev) {
     document.removeEventListener('mousemove', onHoldMove);
@@ -1501,6 +1507,53 @@ function beginHoldMove(x, y) {
   document.body.appendChild(ghost);
   holdMove.ghostEl = ghost;
   moveGhost(x, y);
+  lastHoldPointer = { x, y };
+  updateAutoScroll(y);
+}
+
+// Auto-scroll while holding a card in the top or bottom third of the
+// screen — makes it easy to move a card to a spot that's currently
+// off-screen. Speed ramps up the closer the cursor gets to the true edge.
+const AUTOSCROLL_ZONE_FRACTION = 1 / 3; // top/bottom third of the viewport
+const AUTOSCROLL_MAX_SPEED = 26;        // px per animation frame, right at the very edge
+
+function updateAutoScroll(y) {
+  const vh = window.innerHeight;
+  const edge = vh * AUTOSCROLL_ZONE_FRACTION;
+  if (y < edge) {
+    const intensity = (edge - y) / edge;           // 0 at the 1/3 line → 1 at the very top
+    const eased = intensity * intensity;           // ease-in: gentle at first, fast near the edge
+    autoScrollSpeed = -Math.max(1, Math.round(eased * AUTOSCROLL_MAX_SPEED));
+  } else if (y > vh - edge) {
+    const intensity = (y - (vh - edge)) / edge;     // 0 at the 2/3 line → 1 at the very bottom
+    const eased = intensity * intensity;
+    autoScrollSpeed = Math.max(1, Math.round(eased * AUTOSCROLL_MAX_SPEED));
+  } else {
+    autoScrollSpeed = 0;
+  }
+  if (autoScrollSpeed !== 0 && autoScrollRAF === null) {
+    autoScrollRAF = requestAnimationFrame(autoScrollStep);
+  }
+}
+
+function autoScrollStep() {
+  if (!holdMove || !holdMove.active || autoScrollSpeed === 0) {
+    autoScrollRAF = null;
+    return;
+  }
+  window.scrollBy(0, autoScrollSpeed);
+  // The cursor's viewport position hasn't changed, but the page scrolled
+  // underneath it — recompute what card is now under the (still-held) ghost.
+  if (lastHoldPointer) {
+    moveGhost(lastHoldPointer.x, lastHoldPointer.y);
+    updateDropTarget(lastHoldPointer.x, lastHoldPointer.y);
+  }
+  autoScrollRAF = requestAnimationFrame(autoScrollStep);
+}
+
+function stopAutoScroll() {
+  autoScrollSpeed = 0;
+  if (autoScrollRAF !== null) { cancelAnimationFrame(autoScrollRAF); autoScrollRAF = null; }
 }
 
 function moveGhost(x, y) {
@@ -1548,6 +1601,8 @@ function cleanupHoldMove() {
   document.querySelectorAll('.card.drop-target').forEach(el => el.classList.remove('drop-target'));
   if (holdMove && holdMove.ghostEl) holdMove.ghostEl.remove();
   holdMove = null;
+  lastHoldPointer = null;
+  stopAutoScroll();
 }
 
 // One-time migration: the single-value "group" field was upgraded to a
