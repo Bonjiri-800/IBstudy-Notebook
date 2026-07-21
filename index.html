@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/tabler-icons.min.css" />
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/mathlive"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -290,10 +289,46 @@
     pointer-events: none;
   }
 
+  /* Selected cards get an unmistakable accent tint, border, and a checkmark
+     badge — clicking any card in this state bulk-deletes the whole group. */
   .card.card-selected {
     border-color: var(--accent);
+    background: var(--accent-light);
     box-shadow: 0 0 0 2px var(--accent), var(--shadow-lg);
   }
+  .card.card-selected::after {
+    content: '\2713';
+    position: absolute;
+    top: 10px; right: 10px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--accent); color: #fff;
+    font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+  }
+
+  /* Right-click-hold move: the card currently under the cursor while
+     dragging, and the floating pill that follows the cursor. */
+  .card.drop-target {
+    outline: 2.5px dashed var(--accent);
+    outline-offset: 2px;
+  }
+  .move-ghost {
+    position: fixed;
+    z-index: 200;
+    pointer-events: none;
+    background: var(--text);
+    color: #fff;
+    font-size: 12.5px; font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 20px;
+    box-shadow: var(--shadow-lg);
+    white-space: nowrap;
+  }
+
+  /* Empty grid background is clickable (opens the Add form) */
+  .cards-grid, .vocab-grid, .formula-grid { cursor: pointer; }
 
   /* ── Cards ── */
   .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
@@ -392,7 +427,6 @@
     border-top: 1px solid var(--border);
   }
   .card-date { font-size: 11px; color: var(--text-3); }
-  .card-actions { display: flex; gap: 4px; }
   .card-group {
     display: inline-flex; align-items: center; gap: 4px;
     font-size: 10.5px; font-weight: 500; color: var(--accent);
@@ -460,11 +494,8 @@
   .add-card span { font-size: 13px; }
 
   /* ── Drag-to-reorder (Manual mode) ── */
-  .dragmode .card { cursor: grab; }
-  .dragmode .card:active { cursor: grabbing; }
-  .sortable-ghost   { opacity: 0.35; }
-  .sortable-chosen  { box-shadow: var(--shadow-lg); }
-  .sortable-drag    { box-shadow: var(--shadow-lg); }
+  /* (Manual drag-to-reorder is now handled by our own right-click-hold
+     gesture — see the "Card interactions" JS section — not a drag library.) */
   .drag-hint {
     display: flex; align-items: center; gap: 6px;
     font-size: 12px; color: var(--text-3);
@@ -1192,14 +1223,21 @@ let state = {
 };
 
 // ─────────────────────────────────────────────
-// Multi-select (marquee / rubber-band drag-select) + bulk delete
+// Card interactions — everything lives in this one section.
+//
+// LEFT click (no drag):
+//   • on empty grid space / the "Add" tile → open the Add form
+//   • on a card that is NOT part of an active multi-selection → open that
+//     card's detail view (which has its own Edit / Delete buttons)
+//   • on a card that IS part of an active multi-selection (2+ selected)  →
+//     bulk-delete the whole selection (with a confirmation)
+// LEFT click-and-DRAG (move past a small threshold), starting anywhere in
+// the grid (including on top of a card) → rubber-band (marquee) multi-
+// select; Shift adds to the existing selection instead of replacing it.
+// RIGHT click-and-HOLD (~350ms without moving) on a card, in Manual sort
+// order → picks up that card (or the whole current selection, if the card
+// held is part of it) and lets you drop it at a new position.
 // ─────────────────────────────────────────────
-// Click-and-drag over empty space inside a card grid draws a selection
-// rectangle; any card it overlaps gets selected (hold Shift to add to the
-// existing selection instead of replacing it). Selected cards can then be
-// bulk-deleted from the bar at the top, or — in Manual sort mode — dragged
-// together as a group (see regroupForMultiDrag() in enableDrag()), or
-// moved with the "Move to Top/Bottom" buttons in the bar.
 let selectedIds = new Set();
 let selectionType = null; // which tab ('case'|'vocab'|'formula'|'exam'|'others') the ids belong to
 
@@ -1242,9 +1280,7 @@ function bulkDeleteSelected() {
 
 // Moves every selected item together to the top or bottom of the
 // underlying (Manual-order) array, keeping their relative order. This is a
-// reliable, non-drag way to bulk-move a selection; dragging any selected
-// card (in Manual sort mode) does the same thing to an arbitrary position —
-// see regroupForMultiDrag() in the drag-to-reorder section above.
+// reliable, no-drag way to bulk-move a selection, alongside right-click-hold.
 function bulkMoveSelected(where) {
   if (!selectionType || !selectedIds.size) return;
   const key = TYPE_KEY[selectionType];
@@ -1257,37 +1293,99 @@ function bulkMoveSelected(where) {
   render();
 }
 
+function openDetailForCurrentTab(id) {
+  const t = state.tab;
+  if      (t === 'case')    openCaseDetail(id);
+  else if (t === 'vocab')   openVocabDetail(id);
+  else if (t === 'formula') openFormulaDetail(id);
+  else if (t === 'exam')    openExamDetail(id);
+  else if (t === 'others')  openOtherDetail(id);
+}
+
+const CLICK_MOVE_THRESHOLD = 6; // px of movement before a mousedown counts as a "drag", not a "click"
+const HOLD_MOVE_DELAY = 350;    // ms to hold the right mouse button before a move gesture starts
+
+// Elements a mousedown on should behave completely normally (form fields,
+// buttons, links, the math-field, etc.) — never treated as grid interaction.
+const INTERACTIVE_SELECTOR = 'input, textarea, select, button, a, math-field, label';
+
+// ── Left button: click → add/open/bulk-delete, drag → marquee select ──
+let leftPointer = null;         // { x, y, startedOnCard, startedOnAdd, moved }
 let marqueeEl = null, marqueeStart = null, marqueeBase = new Set(), marqueeShift = false;
 
 document.addEventListener('mousedown', e => {
-  if (e.button !== 0) return;                      // left click only
+  if (e.button !== 0) return;
   const grid = e.target.closest('#sortable-grid');
   if (!grid) return;
-  if (e.target.closest('.card')) return;            // clicking/dragging a card itself is handled elsewhere
+  if (e.target.closest(INTERACTIVE_SELECTOR) && !e.target.closest('.add-card')) return; // let normal controls work untouched (but not the Add tile itself)
+  e.preventDefault(); // stop native text/image drag-selection while we decide what this gesture means
+  const cardEl = e.target.closest('.card');
+  const isAddCard = !!e.target.closest('.add-card');
+  leftPointer = {
+    x: e.clientX, y: e.clientY,
+    startedOnCard: (cardEl && !isAddCard) ? cardEl : null,
+    startedOnAdd: isAddCard,
+    moved: false,
+  };
   marqueeShift = e.shiftKey;
   marqueeBase = new Set(selectedIds);
+  document.addEventListener('mousemove', onLeftMove);
+  document.addEventListener('mouseup', onLeftUp, { once: true });
+});
+
+function onLeftMove(e) {
+  if (!leftPointer) return;
+  const dx = e.clientX - leftPointer.x, dy = e.clientY - leftPointer.y;
+  if (!leftPointer.moved && Math.hypot(dx, dy) > CLICK_MOVE_THRESHOLD) {
+    leftPointer.moved = true;
+    startMarquee(leftPointer.x, leftPointer.y);
+  }
+  if (leftPointer.moved && marqueeEl) {
+    positionMarquee(e.clientX, e.clientY);
+    recomputeMarqueeSelection();
+  }
+}
+
+function onLeftUp() {
+  document.removeEventListener('mousemove', onLeftMove);
+  const info = leftPointer;
+  leftPointer = null;
+  if (!info) return;
+
+  if (info.moved) {
+    if (marqueeEl) { marqueeEl.remove(); marqueeEl = null; }
+    marqueeStart = null;
+    return; // selection was already applied live while dragging
+  }
+
+  // A plain click (no drag):
+  if (info.startedOnAdd) { openAdd(); return; }
+
+  if (info.startedOnCard) {
+    const id = info.startedOnCard.dataset.id;
+    if (selectionType === state.tab && selectedIds.size > 1 && selectedIds.has(id)) {
+      bulkDeleteSelected();               // clicking inside the highlighted selection deletes it all
+    } else {
+      clearSelection();
+      openDetailForCurrentTab(id);        // normal click → that card's edit/delete view
+    }
+    return;
+  }
+
+  // Clicked empty grid background (not a card, not the Add tile)
+  clearSelection();
+  openAdd();
+}
+
+function startMarquee(x, y) {
   if (!marqueeShift) clearSelection();
   selectionType = state.tab;
-  marqueeStart = { x: e.clientX, y: e.clientY };
+  marqueeStart = { x, y };
   marqueeEl = document.createElement('div');
   marqueeEl.className = 'marquee-box';
   document.body.appendChild(marqueeEl);
-  positionMarquee(e.clientX, e.clientY);
-  e.preventDefault();
-});
-
-document.addEventListener('mousemove', e => {
-  if (!marqueeEl) return;
-  positionMarquee(e.clientX, e.clientY);
-  recomputeMarqueeSelection();
-});
-
-document.addEventListener('mouseup', () => {
-  if (!marqueeEl) return;
-  marqueeEl.remove();
-  marqueeEl = null;
-  marqueeStart = null;
-});
+  positionMarquee(x, y);
+}
 
 function positionMarquee(x, y) {
   const left = Math.min(x, marqueeStart.x);
@@ -1310,6 +1408,111 @@ function recomputeMarqueeSelection() {
   selectionType = state.tab;
   applySelectionClasses();
   updateBulkBar();
+}
+
+// ── Right button: press-and-hold on a card → move it (or the whole
+// current selection, if the held card belongs to it) ──
+let holdMove = null; // { groupIds, ghostEl, timer, active }
+
+document.addEventListener('contextmenu', e => {
+  if (e.target.closest('#sortable-grid .card')) e.preventDefault(); // we use right-click for moving, not a menu
+});
+
+document.addEventListener('mousedown', e => {
+  if (e.button !== 2) return;
+  if (state.sort !== 'manual') return; // reordering only makes sense in Manual order
+  const cardEl = e.target.closest('.card');
+  if (!cardEl || e.target.closest('.add-card')) return;
+  if (e.target.closest(INTERACTIVE_SELECTOR)) return;
+  const id = cardEl.dataset.id;
+  const groupIds = (selectionType === state.tab && selectedIds.size > 1 && selectedIds.has(id))
+    ? [...selectedIds]
+    : [id];
+  const startX = e.clientX, startY = e.clientY;
+  holdMove = { groupIds, active: false, ghostEl: null, timer: null };
+  holdMove.timer = setTimeout(() => beginHoldMove(startX, startY), HOLD_MOVE_DELAY);
+  document.addEventListener('mousemove', onHoldMove);
+  document.addEventListener('mouseup', onHoldUp, { once: true });
+
+  function onHoldMove(ev) {
+    if (!holdMove) return;
+    if (!holdMove.active) {
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > CLICK_MOVE_THRESHOLD) {
+        clearTimeout(holdMove.timer);
+        cleanupHoldMove();
+      }
+      return;
+    }
+    moveGhost(ev.clientX, ev.clientY);
+    updateDropTarget(ev.clientX, ev.clientY);
+  }
+  function onHoldUp(ev) {
+    document.removeEventListener('mousemove', onHoldMove);
+    if (!holdMove) return;
+    clearTimeout(holdMove.timer);
+    if (holdMove.active) finalizeHoldMove(ev.clientX, ev.clientY);
+    cleanupHoldMove();
+  }
+});
+
+function beginHoldMove(x, y) {
+  if (!holdMove) return;
+  holdMove.active = true;
+  document.body.style.cursor = 'grabbing';
+  const count = holdMove.groupIds.length;
+  const ghost = document.createElement('div');
+  ghost.className = 'move-ghost';
+  ghost.textContent = count > 1 ? `Moving ${count} items` : 'Moving item';
+  document.body.appendChild(ghost);
+  holdMove.ghostEl = ghost;
+  moveGhost(x, y);
+}
+
+function moveGhost(x, y) {
+  if (!holdMove || !holdMove.ghostEl) return;
+  holdMove.ghostEl.style.left = (x + 14) + 'px';
+  holdMove.ghostEl.style.top  = (y + 14) + 'px';
+}
+
+function updateDropTarget(x, y) {
+  document.querySelectorAll('.card.drop-target').forEach(el => el.classList.remove('drop-target'));
+  const under = document.elementFromPoint(x, y);
+  const targetEl = under && under.closest('#sortable-grid .card');
+  if (targetEl && !holdMove.groupIds.includes(targetEl.dataset.id)) {
+    targetEl.classList.add('drop-target');
+  }
+}
+
+function finalizeHoldMove(x, y) {
+  const under = document.elementFromPoint(x, y);
+  const targetEl = under && under.closest('#sortable-grid .card');
+  const key = TYPE_KEY[state.tab];
+  const arr = state[key];
+  if (!arr) return;
+  const groupSet = new Set(holdMove.groupIds);
+  const group = arr.filter(item => groupSet.has(item.id));
+  const rest  = arr.filter(item => !groupSet.has(item.id));
+  let insertIdx = rest.length; // default: no valid target → drop at the end
+  if (targetEl && !groupSet.has(targetEl.dataset.id)) {
+    const targetId = targetEl.dataset.id;
+    const idxInRest = rest.findIndex(item => item.id === targetId);
+    if (idxInRest !== -1) {
+      const targetRect = targetEl.getBoundingClientRect();
+      const dropBefore = x < (targetRect.left + targetRect.width / 2);
+      insertIdx = dropBefore ? idxInRest : idxInRest + 1;
+    }
+  }
+  state[key] = [...rest.slice(0, insertIdx), ...group, ...rest.slice(insertIdx)];
+  save();
+  clearSelection();
+  render();
+}
+
+function cleanupHoldMove() {
+  document.body.style.cursor = '';
+  document.querySelectorAll('.card.drop-target').forEach(el => el.classList.remove('drop-target'));
+  if (holdMove && holdMove.ghostEl) holdMove.ghostEl.remove();
+  holdMove = null;
 }
 
 // One-time migration: the single-value "group" field was upgraded to a
@@ -1699,86 +1902,15 @@ function readTagBox(boxId) {
 }
 
 // ─────────────────────────────────────────────
-// Drag-to-reorder (SortableJS) — active only in Manual sort mode
+// Manual reorder — moving cards is now done with our own right-click
+// press-and-hold gesture (see the "Card interactions" section below),
+// not a third-party drag library. TYPE_KEY maps a tab name to its state array.
 // ─────────────────────────────────────────────
-let sortableInstance = null;
 const TYPE_KEY = { case:'cases', vocab:'vocabs', formula:'formulas', exam:'exams', others:'others' };
 
-function destroySortable() {
-  if (sortableInstance) {
-    try { sortableInstance.destroy(); } catch(e) {}
-    sortableInstance = null;
-  }
-}
-
-// When several cards are selected (marquee) and the person drags ONE of
-// them, SortableJS only physically moves that single card — the rest of
-// the selected cards are still left in their old spots in `ids`. This
-// takes that raw post-drop order and reinserts every selected id as one
-// contiguous block at the position the dragged card landed at (measured
-// against the non-selected cards), so the whole group moves together.
-function regroupForMultiDrag(ids, draggedId, selected) {
-  if (!selected || selected.size <= 1 || !selected.has(draggedId)) return ids;
-  const draggedIdx = ids.indexOf(draggedId);
-  if (draggedIdx === -1) return ids;
-  const groupIds = ids.filter(id => selected.has(id));   // keep the group's own relative order
-  const restIds  = ids.filter(id => !selected.has(id));
-  let insertAt = 0;
-  for (let i = 0; i < draggedIdx; i++) {
-    if (!selected.has(ids[i])) insertAt++;
-  }
-  return [...restIds.slice(0, insertAt), ...groupIds, ...restIds.slice(insertAt)];
-}
-
-function enableDrag(type) {
-  if (state.sort !== 'manual') return;
-  if (typeof Sortable === 'undefined') return;       // CDN unavailable → app still works, just no drag
-  const grid = document.getElementById('sortable-grid');
-  if (!grid) return;
-  grid.classList.add('dragmode');
-  sortableInstance = new Sortable(grid, {
-    animation: 150,              // surrounding cards slide into place (Puzzle&Dragons-style)
-    draggable: '.card',
-    filter: '.add-card',         // the "Add" tile is not draggable
-    delay: 150,                  // press-and-hold on touch so normal swipes still scroll
-    delayOnTouchOnly: true,
-    ghostClass: 'sortable-ghost',
-    chosenClass: 'sortable-chosen',
-    dragClass: 'sortable-drag',
-    onEnd: (evt) => {
-      const rawIds = [...grid.querySelectorAll('.card')].map(el => el.dataset.id);
-      const draggedId = evt && evt.item ? evt.item.dataset.id : null;
-      const isGroupDrag = selectionType === type && selectedIds.size > 1 && draggedId && selectedIds.has(draggedId);
-      const finalIds = isGroupDrag ? regroupForMultiDrag(rawIds, draggedId, selectedIds) : rawIds;
-      reorderByVisible(type, finalIds);
-      clearSelection();
-      if (isGroupDrag) render(); // DOM only reflects the single dragged card's move — re-render to show the whole group in its new spot
-    }
-  });
-}
-
-// Reorder the full array using the new order of the currently *visible* cards,
-// keeping hidden (filtered-out) items in their original slots.
-function reorderByVisible(type, newVisibleIds) {
-  const key = TYPE_KEY[type];
-  const arr = state[key];
-  if (!arr) return;
-  const visibleSet = new Set(newVisibleIds);
-  const slotCount = arr.reduce((n, i) => n + (visibleSet.has(i.id) ? 1 : 0), 0);
-  if (slotCount !== newVisibleIds.length) { render(); return; }   // mismatch → restore from data
-  const byId = {};
-  arr.forEach(x => { byId[x.id] = x; });
-  let p = 0;
-  const result = arr.map(item => visibleSet.has(item.id) ? byId[newVisibleIds[p++]] : item);
-  state[key] = result;
-  save();
-  // DOM already reflects the new order, so no re-render is needed here.
-}
-
-const DRAG_HINT = `<div class="drag-hint"><i class="ti ti-arrows-move"></i> Drag cards to reorder — this Manual order is saved. Drag-select (click an empty area and drag) to select multiple cards.</div>`;
+const DRAG_HINT = `<div class="drag-hint"><i class="ti ti-info-circle"></i> Click empty space to add · click a card to open/edit it · drag over empty space to select multiple · right-click and hold a card to move it (Manual order only)</div>`;
 
 function render() {
-  destroySortable();
   updateStats();
   refreshGroupFilter();
   const t = state.tab;
@@ -1810,7 +1942,7 @@ function renderCases() {
   }
   const cards = items.length
     ? items.map(c => `
-      <div class="card" data-id="${c.id}" onclick="openCaseDetail('${c.id}')">
+      <div class="card" data-id="${c.id}">
         <div class="card-stripe ${c.subject}"></div>
         <div class="card-sub ${c.subject}">${SUBJECT_NAMES[c.subject]||c.subject}</div>
         ${groupChipsHTML(c.groups)}
@@ -1818,18 +1950,13 @@ function renderCases() {
         <div class="card-preview">${esc(stripMd(c.content))}</div>
         <div class="card-footer">
           <span class="card-date">${c.date||''}</span>
-          <div class="card-actions">
-            <button class="icon-btn" onclick="event.stopPropagation();openEditCase('${c.id}')" title="Edit"><i class="ti ti-pencil"></i></button>
-            <button class="icon-btn del" onclick="event.stopPropagation();deleteCase('${c.id}')" title="Delete"><i class="ti ti-trash"></i></button>
-          </div>
         </div>
       </div>`).join('')
     : `<div class="empty" style="grid-column:1/-1"><p>No results found</p></div>`;
   el.innerHTML = `${state.sort==='manual'?DRAG_HINT:''}<div class="cards-grid" id="sortable-grid">
     ${cards}
-    <button class="add-card" onclick="openAdd()"><i class="ti ti-plus"></i><span>Add Case Study</span></button>
+    <button class="add-card"><i class="ti ti-plus"></i><span>Add Case Study</span></button>
   </div>`;
-  enableDrag('case');
 }
 
 function renderVocabs() {
@@ -1841,7 +1968,7 @@ function renderVocabs() {
   }
   const cards = items.length
     ? items.map(v => `
-      <div class="card" data-id="${v.id}" onclick="openVocabDetail('${v.id}')">
+      <div class="card" data-id="${v.id}">
         <div class="card-stripe ${v.subject}"></div>
         <div class="card-sub ${v.subject}">${SUBJECT_NAMES[v.subject]||v.subject}</div>
         ${groupChipsHTML(v.groups)}
@@ -1850,18 +1977,13 @@ function renderVocabs() {
         ${v.example ? `<div class="vocab-ex">${esc(stripMd(v.example))}</div>` : ''}
         <div class="card-footer">
           <span class="card-date">${v.date||''}</span>
-          <div class="card-actions">
-            <button class="icon-btn" onclick="event.stopPropagation();openEditVocab('${v.id}')" title="Edit"><i class="ti ti-pencil"></i></button>
-            <button class="icon-btn del" onclick="event.stopPropagation();deleteVocab('${v.id}')" title="Delete"><i class="ti ti-trash"></i></button>
-          </div>
         </div>
       </div>`).join('')
     : `<div class="empty" style="grid-column:1/-1"><p>No results found</p></div>`;
   el.innerHTML = `${state.sort==='manual'?DRAG_HINT:''}<div class="vocab-grid" id="sortable-grid">
     ${cards}
-    <button class="add-card" onclick="openAdd()"><i class="ti ti-plus"></i><span>Add Vocabulary</span></button>
+    <button class="add-card"><i class="ti ti-plus"></i><span>Add Vocabulary</span></button>
   </div>`;
-  enableDrag('vocab');
 }
 
 // ─────────────────────────────────────────────
@@ -2177,7 +2299,7 @@ function renderFormulas() {
 
   const cards = items.length
     ? items.map(f => `
-      <div class="card" data-id="${f.id}" onclick="openFormulaDetail('${f.id}')">
+      <div class="card" data-id="${f.id}">
         <div class="card-stripe ${f.subject}"></div>
         <div class="card-sub ${f.subject}">${SUBJECT_NAMES[f.subject]||f.subject}</div>
         ${groupChipsHTML(f.groups)}
@@ -2187,19 +2309,14 @@ function renderFormulas() {
         ${f.units ? `<div class="formula-unit">Units: ${esc(f.units)}</div>` : ''}
         <div class="card-footer">
           <span class="card-date">${f.date||''}</span>
-          <div class="card-actions">
-            <button class="icon-btn" onclick="event.stopPropagation();openEditFormula('${f.id}')" title="Edit"><i class="ti ti-pencil"></i></button>
-            <button class="icon-btn del" onclick="event.stopPropagation();deleteFormula('${f.id}')" title="Delete"><i class="ti ti-trash"></i></button>
-          </div>
         </div>
       </div>`).join('')
     : `<div class="empty" style="grid-column:1/-1"><p>No results found</p></div>`;
 
   el.innerHTML = `${state.sort==='manual'?DRAG_HINT:''}<div class="formula-grid" id="sortable-grid">
     ${cards}
-    <button class="add-card" onclick="openAdd()"><i class="ti ti-plus"></i><span>Add Formula</span></button>
+    <button class="add-card"><i class="ti ti-plus"></i><span>Add Formula</span></button>
   </div>`;
-  enableDrag('formula');
 }
 
 function openAddFormula(prefill={}) {
@@ -2328,7 +2445,7 @@ function renderExams() {
   const cards = items.length
     ? items.map(e => {
         const tc = TYPE_COLORS[e.type]||'#555';
-        return `<div class="card" data-id="${e.id}" onclick="openExamDetail('${e.id}')">
+        return `<div class="card" data-id="${e.id}">
           <div class="card-stripe ${e.subject}"></div>
           <div style="display:flex;align-items:center;gap:7px;margin-top:2px;margin-bottom:7px;">
             <span style="font-size:10px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:${tc};background:${tc}18;padding:2px 8px;border-radius:20px;">${esc(e.type)}</span>
@@ -2339,10 +2456,6 @@ function renderExams() {
           ${e.criteria ? `<div class="card-preview">${esc(stripMd(e.criteria))}</div>` : ''}
           <div class="card-footer">
             <span class="card-date">${e.date||''}</span>
-            <div class="card-actions">
-              <button class="icon-btn" onclick="event.stopPropagation();openEditExam('${e.id}')" title="Edit"><i class="ti ti-pencil"></i></button>
-              <button class="icon-btn del" onclick="event.stopPropagation();deleteExam('${e.id}')" title="Delete"><i class="ti ti-trash"></i></button>
-            </div>
           </div>
         </div>`;
       }).join('')
@@ -2350,9 +2463,8 @@ function renderExams() {
 
   el.innerHTML = `${state.sort==='manual'?DRAG_HINT:''}<div class="cards-grid" id="sortable-grid">
     ${cards}
-    <button class="add-card" onclick="openAdd()"><i class="ti ti-plus"></i><span>Add Exam</span></button>
+    <button class="add-card"><i class="ti ti-plus"></i><span>Add Exam</span></button>
   </div>`;
-  enableDrag('exam');
 }
 
 function openAddExam(prefill={}) {
@@ -2471,7 +2583,7 @@ function renderOthers() {
 
   const cards = items.length
     ? items.map(o => `
-      <div class="card" data-id="${o.id}" onclick="openOtherDetail('${o.id}')">
+      <div class="card" data-id="${o.id}">
         <div class="card-stripe" style="background:#78909c"></div>
         ${groupChipsHTML(o.groups)}
         <div class="card-title">${esc(o.title)}</div>
@@ -2479,10 +2591,6 @@ function renderOthers() {
         ${o.url  ? `<div style="font-size:11px;color:var(--accent);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🔗 ${esc(o.url)}</div>` : ''}
         <div class="card-footer">
           <span class="card-date">${o.date||''}</span>
-          <div class="card-actions">
-            <button class="icon-btn" onclick="event.stopPropagation();openAddOther(state.others.find(x=>x.id==='${o.id}'))" title="Edit"><i class="ti ti-pencil"></i></button>
-            <button class="icon-btn del" onclick="event.stopPropagation();deleteOther('${o.id}')" title="Delete"><i class="ti ti-trash"></i></button>
-          </div>
         </div>
       </div>`)
       .join('')
@@ -2490,9 +2598,8 @@ function renderOthers() {
 
   el.innerHTML = `${state.sort==='manual'?DRAG_HINT:''}<div class="cards-grid" id="sortable-grid">
     ${cards}
-    <button class="add-card" onclick="openAdd()"><i class="ti ti-plus"></i><span>Add</span></button>
+    <button class="add-card"><i class="ti ti-plus"></i><span>Add</span></button>
   </div>`;
-  enableDrag('others');
 }
 
 function openAddOther(prefill={}) {
