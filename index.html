@@ -1232,13 +1232,13 @@ let state = {
 // LEFT click-and-DRAG (move past a small threshold), starting anywhere in
 // the grid (including on top of a card) → rubber-band (marquee) multi-
 // select; Shift adds to the existing selection instead of replacing it.
-// RIGHT click (quick, released before the hold delay, without moving away):
-//   • on a card that's part of an active multi-selection (2+) → delete the
-//     whole selection (with a confirmation)
-//   • on any other card → delete just that one card (with a confirmation)
 // RIGHT click-and-HOLD (~350ms without moving) on a card, in Manual sort
 // order → picks up that card (or the whole current selection, if the card
-// held is part of it) and lets you drop it at a new position.
+// held is part of it) and lets you drop it at a new position. A quick
+// right-click (released before the hold delay) does nothing.
+// Deleting is done from the always-visible selection bar's Delete button
+// (appears once one or more cards are selected), or from a card's own
+// detail view (Edit / Delete).
 // ─────────────────────────────────────────────
 let selectedIds = new Set();
 let selectionType = null; // which tab ('case'|'vocab'|'formula'|'exam'|'others') the ids belong to
@@ -1431,16 +1431,14 @@ document.addEventListener('mousedown', e => {
   const cardEl = e.target.closest('.card');
   if (!cardEl || e.target.closest('.add-card')) return;
   if (e.target.closest(INTERACTIVE_SELECTOR)) return;
+  if (state.sort !== 'manual') return; // reordering only makes sense in Manual order; nothing else happens on right-click
   e.preventDefault();
   const id = cardEl.dataset.id;
   const isPartOfSelection = selectionType === state.tab && selectedIds.size > 1 && selectedIds.has(id);
   const groupIds = isPartOfSelection ? [...selectedIds] : [id];
-  const canMove = state.sort === 'manual'; // reordering only makes sense in Manual order
   const startX = e.clientX, startY = e.clientY;
   holdMove = { groupIds, active: false, ghostEl: null, timer: null };
-  if (canMove) {
-    holdMove.timer = setTimeout(() => beginHoldMove(startX, startY), HOLD_MOVE_DELAY);
-  }
+  holdMove.timer = setTimeout(() => beginHoldMove(startX, startY), HOLD_MOVE_DELAY);
   document.addEventListener('mousemove', onHoldMove);
   document.addEventListener('mouseup', onHoldUp, { once: true });
 
@@ -1449,7 +1447,6 @@ document.addEventListener('mousedown', e => {
     if (!holdMove.active) {
       if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > CLICK_MOVE_THRESHOLD) {
         // moved before the hold delay elapsed → cancel the gesture entirely
-        // (neither a "quick click" delete nor a move should happen)
         clearTimeout(holdMove.timer);
         cleanupHoldMove();
       }
@@ -1464,37 +1461,13 @@ document.addEventListener('mousedown', e => {
     document.removeEventListener('mousemove', onHoldMove);
     if (!holdMove) return;
     const wasActive = holdMove.active;
-    const idsForThisGesture = holdMove.groupIds;
     clearTimeout(holdMove.timer);
-    if (wasActive) {
-      finalizeHoldMove(ev.clientX, ev.clientY);
-    } else {
-      rightClickDelete(idsForThisGesture);
-    }
+    if (wasActive) finalizeHoldMove(ev.clientX, ev.clientY);
+    // A quick right-click (released before the hold delay) does nothing —
+    // deletion lives in the always-visible selection bar's Delete button.
     cleanupHoldMove();
   }
 });
-
-// A quick right-click (released before the hold delay, without moving away)
-// deletes: the whole multi-selection if the card belonged to one, or just
-// that single card otherwise.
-function rightClickDelete(ids) {
-  if (ids.length > 1) {
-    bulkDeleteSelected();
-  } else {
-    clearSelection();
-    deleteItemForCurrentTab(ids[0]);
-  }
-}
-
-function deleteItemForCurrentTab(id) {
-  const t = state.tab;
-  if      (t === 'case')    deleteCase(id);
-  else if (t === 'vocab')   deleteVocab(id);
-  else if (t === 'formula') deleteFormula(id);
-  else if (t === 'exam')    deleteExam(id);
-  else if (t === 'others')  deleteOther(id);
-}
 
 function beginHoldMove(x, y) {
   if (!holdMove) return;
@@ -1998,7 +1971,7 @@ function readTagBox(boxId) {
 // ─────────────────────────────────────────────
 const TYPE_KEY = { case:'cases', vocab:'vocabs', formula:'formulas', exam:'exams', others:'others' };
 
-const DRAG_HINT = `<div class="drag-hint"><i class="ti ti-info-circle"></i> Click empty space to add · click a card to open/edit it · drag to select multiple · right-click a card (or a selection) to delete it · right-click and hold to move it (Manual order only)</div>`;
+const DRAG_HINT = `<div class="drag-hint"><i class="ti ti-info-circle"></i> Click empty space to add · click a card to open/edit it · drag to select multiple (Delete button appears above once selected) · right-click and hold a card to move it (Manual order only)</div>`;
 
 function render() {
   updateStats();
@@ -2336,7 +2309,6 @@ function openCaseDetail(id) {
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
       <span style="font-size:12px;color:var(--text-3);">${c.date||''}</span>
       <div style="display:flex;gap:8px;">
-        <button class="btn btn-danger" onclick="deleteCase('${c.id}')"><i class="ti ti-trash"></i> Delete</button>
         <button class="btn" onclick="closeModal();openEditCase('${c.id}')"><i class="ti ti-pencil"></i> Edit</button>
         <button class="btn btn-primary" onclick="closeModal()">Close</button>
       </div>
@@ -2360,7 +2332,6 @@ function openVocabDetail(id) {
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
       <span style="font-size:12px;color:var(--text-3);">${v.date||''}</span>
       <div style="display:flex;gap:8px;">
-        <button class="btn btn-danger" onclick="deleteVocab('${v.id}')"><i class="ti ti-trash"></i> Delete</button>
         <button class="btn" onclick="closeModal();openEditVocab('${v.id}')"><i class="ti ti-pencil"></i> Edit</button>
         <button class="btn btn-primary" onclick="closeModal()">Close</button>
       </div>
@@ -2503,7 +2474,6 @@ function openFormulaDetail(id) {
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
       <span style="font-size:12px;color:var(--text-3);">${f.date||''}</span>
       <div style="display:flex;gap:8px;">
-        <button class="btn btn-danger" onclick="deleteFormula('${f.id}')"><i class="ti ti-trash"></i> Delete</button>
         <button class="btn" onclick="closeModal();openEditFormula('${f.id}')"><i class="ti ti-pencil"></i> Edit</button>
         <button class="btn btn-primary" onclick="closeModal()">Close</button>
       </div>
@@ -2644,7 +2614,6 @@ function openExamDetail(id) {
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
       <span style="font-size:12px;color:var(--text-3);">${e.date||''}</span>
       <div style="display:flex;gap:8px;">
-        <button class="btn btn-danger" onclick="deleteExam('${e.id}')"><i class="ti ti-trash"></i> Delete</button>
         <button class="btn" onclick="closeModal();openEditExam('${e.id}')"><i class="ti ti-pencil"></i> Edit</button>
         <button class="btn btn-primary" onclick="closeModal()">Close</button>
       </div>
@@ -2770,7 +2739,6 @@ function openOtherDetail(id) {
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
       <span style="font-size:12px;color:var(--text-3);">${o.date||''}</span>
       <div style="display:flex;gap:8px;">
-        <button class="btn btn-danger" onclick="deleteOther('${o.id}')"><i class="ti ti-trash"></i> Delete</button>
         <button class="btn" onclick="closeModal();openAddOther(state.others.find(x=>x.id==='${o.id}'))"><i class="ti ti-pencil"></i> Edit</button>
         <button class="btn btn-primary" onclick="closeModal()">Close</button>
       </div>
