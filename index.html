@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/tabler-icons.min.css" />
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathlive"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -473,6 +474,26 @@
   .form-row textarea:focus,
   .form-row select:focus { border-color: var(--accent); }
   .form-row textarea { min-height: 100px; line-height: 1.65; }
+
+  /* Desmos-style math input (MathLive <math-field>) used for the Formula
+     Expression field. Height is intentionally NOT fixed — MathLive grows
+     the element automatically when content stacks vertically (e.g. typing
+     "a/b" turns into a fraction with a numerator/denominator layout). */
+  .form-row math-field {
+    display: block;
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 12px;
+    font-size: 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg);
+    color: var(--text);
+    --caret-color: var(--accent);
+    --selection-background-color: var(--accent-light);
+  }
+  .form-row math-field:focus-within { border-color: var(--accent); }
+  .expr-hint { font-size: 11px; color: var(--text-3); margin-top: 5px; line-height: 1.5; }
 
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1.4rem; }
 
@@ -1178,6 +1199,17 @@ function md(s) {
     .replace(/\n/g, '<br>');
 }
 
+// Renders a LaTeX string (as produced by the Formula Expression math-field)
+// into static, non-editable math markup for card previews and detail views.
+// Falls back to plain escaped text if the MathLive library hasn't loaded.
+function renderLatex(latex) {
+  if (!latex) return '';
+  if (window.MathLive && typeof window.MathLive.convertLatexToMarkup === 'function') {
+    try { return window.MathLive.convertLatexToMarkup(latex); } catch(e) { /* fall through */ }
+  }
+  return esc(latex);
+}
+
 function today() { return new Date().toISOString().slice(0,10); }
 function uid()   { return Date.now() + Math.random().toString(36).slice(2,6); }
 
@@ -1738,9 +1770,9 @@ function openAddCase(prefill={}) {
       <input type="text" id="f-keys" value="${esc(prefill.keyPoints||'')}" placeholder="e.g. PED, market structure, monopoly" />
     </div>
     <div class="form-row">
-      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
+      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. Unit 3, Midterm Review)</span></label>
       <div class="tag-input-box" id="f-group-box">
-        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
+        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="Type a group name and press Enter" />
       </div>
     </div>
     <div class="modal-actions">
@@ -1825,9 +1857,9 @@ function openAddVocab(prefill={}) {
       <input type="text" id="f-ex" value="${esc(prefill.example||'')}" placeholder="e.g. The PED of luxury goods is typically greater than 1." />
     </div>
     <div class="form-row">
-      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
+      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. Unit 3, Midterm Review)</span></label>
       <div class="tag-input-box" id="f-group-box">
-        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
+        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="Type a group name and press Enter" />
       </div>
     </div>
     <div class="modal-actions">
@@ -1946,7 +1978,7 @@ function renderFormulas() {
         <div class="card-sub ${f.subject}">${SUBJECT_NAMES[f.subject]||f.subject}</div>
         ${groupChipsHTML(f.groups)}
         <div class="formula-name">${esc(f.name)}</div>
-        <div class="formula-expr">${md(f.expression)}</div>
+        <div class="formula-expr">${renderLatex(f.expression)}</div>
         ${f.description ? `<div class="formula-desc">${esc(stripMd(f.description))}</div>` : ''}
         ${f.units ? `<div class="formula-unit">Units: ${esc(f.units)}</div>` : ''}
         <div class="card-footer">
@@ -1983,8 +2015,9 @@ function openAddFormula(prefill={}) {
       <input type="text" id="f-name" value="${esc(prefill.name||'')}" placeholder="e.g. Newton's Second Law" />
     </div>
     <div class="form-row">
-      <label>Expression <span style="text-transform:none;font-weight:400;color:var(--text-3);">— use the panel on the right for π, √, ∫, x<sub>y</sub>, etc.</span></label>
-      <input type="text" id="f-expr" value="${esc(prefill.expression||'')}" placeholder="e.g. F = ma" style="font-family:'Courier New',monospace; font-size:15px;" />
+      <label>Expression</label>
+      <math-field id="f-expr" placeholder="e.g. F=ma">${esc(prefill.expression||'')}</math-field>
+      <div class="expr-hint">Type naturally — e.g. "a/b" becomes a fraction, "sqrt" becomes a root sign. Use the panel on the right for Greek letters and other symbols.</div>
     </div>
     <div class="form-row">
       <label>Units (optional)</label>
@@ -1995,9 +2028,9 @@ function openAddFormula(prefill={}) {
       <textarea id="f-desc" style="min-height:90px;" placeholder="Explain each variable, when to use this formula, derivation notes...">${esc(prefill.description||'')}</textarea>
     </div>
     <div class="form-row">
-      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
+      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. Unit 3, Midterm Review)</span></label>
       <div class="tag-input-box" id="f-group-box">
-        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
+        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="Type a group name and press Enter" />
       </div>
     </div>
     <div class="modal-actions">
@@ -2012,7 +2045,7 @@ function openAddFormula(prefill={}) {
 
 function saveFormula(editId) {
   const name = document.getElementById('f-name').value.trim();
-  const expression = document.getElementById('f-expr').value.trim();
+  const expression = (document.getElementById('f-expr').value || '').trim();
   if (!name) { alert('Please enter a formula name'); return; }
   if (!expression) { alert('Please enter an expression'); return; }
   const item = {
@@ -2052,7 +2085,7 @@ function openFormulaDetail(id) {
     <span class="detail-sub-badge">${SUBJECT_NAMES[f.subject]||f.subject}</span>
     ${groupChipsHTML(f.groups, 'detail')}
     <div class="detail-title">${esc(f.name)}</div>
-    <div class="detail-formula-expr">${md(f.expression)}</div>
+    <div class="detail-formula-expr">${renderLatex(f.expression)}</div>
     ${f.units ? `<div class="detail-section"><div class="detail-label">Units</div><div class="detail-body">${esc(f.units)}</div></div>` : ''}
     ${f.description ? `<div class="detail-section"><div class="detail-label">Description / Variables</div><div class="detail-body">${md(f.description)}</div></div>` : ''}
     <hr class="modal-divider" />
@@ -2144,9 +2177,9 @@ function openAddExam(prefill={}) {
       <textarea id="f-criteria" style="min-height:150px;" placeholder="Enter each criterion, marks awarded, and key points, together with prep notes, strategy, and time-management tips...">${esc(prefill.criteria||'')}</textarea>
     </div>
     <div class="form-row">
-      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. 坊っちゃん)</span></label>
+      <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to a group (e.g. Unit 3, Midterm Review)</span></label>
       <div class="tag-input-box" id="f-group-box">
-        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="グループ名を入力して Enter" />
+        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="Type a group name and press Enter" />
       </div>
     </div>
     <div class="modal-actions">
@@ -2280,7 +2313,7 @@ function openAddOther(prefill={}) {
     <div class="form-row">
       <label>Group <span style="text-transform:none;font-weight:400;color:var(--text-3);">— tag this item to one or more groups</span></label>
       <div class="tag-input-box" id="f-group-box">
-        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="Enter group name and press Enter" />
+        <input type="text" class="tag-input-field" list="group-suggestions" placeholder="Type a group name and press Enter" />
       </div>
     </div>
     <div class="modal-actions">
@@ -2363,7 +2396,7 @@ function fmtWrap(marker, taId) {
 // Wraps the current selection in an asymmetric pair (e.g. "_{" + "}" for
 // subscript). If nothing is selected, inserts an empty pair and places the
 // cursor between them so the person can type the subscript directly —
-// this is the "下ボタン" used for things like log bases (log_{10}) or
+// this is the subscript button used for things like log bases (log_{10}) or
 // variable subscripts (F_{A}).
 function fmtSubscript(taId) {
   const ta = document.getElementById(taId);
@@ -2406,23 +2439,54 @@ function injectToolbars() {
 }
 
 // ─────────────────────────────────────────────
-// Math symbol panel — Greek letters, operators, root/power, calculus, and
-// italic/subscript actions. Shown on the right side of the screen while
-// the Formula add/edit modal is open, so π, √, ∫, F_A-style subscripts,
-// etc. can be inserted into whichever field is focused (Expression,
-// Units, or Description) without leaving the keyboard.
+// Math symbol panel — Greek letters, operators, root/power, and calculus
+// symbols. Shown on the right side of the screen while the Formula
+// add/edit modal is open, so symbols can be inserted into whichever field
+// is focused (Expression, Units, or Description) without leaving the
+// keyboard. The Expression field is a MathLive math-field (like Desmos),
+// so symbols there are inserted as LaTeX and render as real math (e.g. a
+// fraction, a root sign). The other fields are plain text, so symbols
+// there are inserted as literal Unicode characters, and the action row
+// falls back to this app's own lightweight *italic* / _{subscript} markup.
 // ─────────────────────────────────────────────
-const GREEK_SYMBOLS = ['π','α','β','γ','Δ','δ','θ','λ','μ','ρ','σ','Σ','φ','Φ','ω','Ω','ε','η','Γ','χ','ψ','τ','ν','κ'];
-const ARITH_SYMBOLS = ['×','÷','±','=','≠','≤','≥','≈','°','·'];
-const ROOT_SYMBOLS  = ['√','∛','^','²','³','⁻¹'];
-const CALC_SYMBOLS  = ['∫','∂','∑','∏','∞','→','∈','∇','lim','Δ'];
+const GREEK_SYMBOLS = [
+  {c:'π',l:'\\pi'}, {c:'α',l:'\\alpha'}, {c:'β',l:'\\beta'}, {c:'γ',l:'\\gamma'},
+  {c:'Δ',l:'\\Delta'}, {c:'δ',l:'\\delta'}, {c:'θ',l:'\\theta'}, {c:'λ',l:'\\lambda'},
+  {c:'μ',l:'\\mu'}, {c:'ρ',l:'\\rho'}, {c:'σ',l:'\\sigma'}, {c:'Σ',l:'\\Sigma'},
+  {c:'φ',l:'\\varphi'}, {c:'Φ',l:'\\Phi'}, {c:'ω',l:'\\omega'}, {c:'Ω',l:'\\Omega'},
+  {c:'ε',l:'\\epsilon'}, {c:'η',l:'\\eta'}, {c:'Γ',l:'\\Gamma'}, {c:'χ',l:'\\chi'},
+  {c:'ψ',l:'\\psi'}, {c:'τ',l:'\\tau'}, {c:'ν',l:'\\nu'}, {c:'κ',l:'\\kappa'},
+];
+const ARITH_SYMBOLS = [
+  {c:'×',l:'\\times'}, {c:'÷',l:'\\div'}, {c:'±',l:'\\pm'}, {c:'=',l:'='},
+  {c:'≠',l:'\\neq'}, {c:'≤',l:'\\le'}, {c:'≥',l:'\\ge'}, {c:'≈',l:'\\approx'},
+  {c:'°',l:'^\\circ'}, {c:'·',l:'\\cdot'},
+];
+const ROOT_SYMBOLS = [
+  {c:'a/b', l:'\\frac{}{}', label:'Fraction'},
+  {c:'√',   l:'\\sqrt{}'},
+  {c:'∛',   l:'\\sqrt[3]{}'},
+  {c:'xʸ',  l:'^{}', label:'Superscript'},
+  {c:'²',   l:'^2'},
+  {c:'³',   l:'^3'},
+];
+const CALC_SYMBOLS = [
+  {c:'∫',l:'\\int'}, {c:'∂',l:'\\partial'}, {c:'∑',l:'\\sum'}, {c:'∏',l:'\\prod'},
+  {c:'∞',l:'\\infty'}, {c:'→',l:'\\to'}, {c:'∈',l:'\\in'}, {c:'∇',l:'\\nabla'},
+  {c:'lim',l:'\\lim'},
+];
 
 const SYMBOL_FIELD_IDS = ['f-expr','f-name','f-units','f-desc'];
 let activeSymbolFieldId = 'f-expr';
 
+function isMathField(el) {
+  return !!el && el.tagName === 'MATH-FIELD';
+}
+
 function trackSymbolField(e) {
   if (e.target && e.target.id && SYMBOL_FIELD_IDS.includes(e.target.id)) {
     activeSymbolFieldId = e.target.id;
+    refreshSymbolActionsRow();
   }
 }
 document.addEventListener('focusin', trackSymbolField);
@@ -2431,17 +2495,25 @@ function getActiveSymbolField() {
   return document.getElementById(activeSymbolFieldId) || document.getElementById('f-expr');
 }
 
-// Inserts text at the current cursor position (or replaces the current
-// selection) in whichever formula field was last focused.
-function insertSymbol(sym) {
+// Inserts a symbol at the current cursor position (or over the current
+// selection) in whichever formula field was last focused. For the
+// MathLive math-field this inserts LaTeX (rendered as real math); for
+// plain text fields it inserts the literal Unicode character.
+function insertSymbol(item) {
   const el = getActiveSymbolField();
   if (!el) return;
+  if (isMathField(el)) {
+    el.focus();
+    el.insert(item.l, { focus: true });
+    return;
+  }
   const start = el.selectionStart != null ? el.selectionStart : el.value.length;
   const end   = el.selectionEnd   != null ? el.selectionEnd   : el.value.length;
+  const text = item.c;
   if (el.setRangeText) {
-    el.setRangeText(sym, start, end, 'end');
+    el.setRangeText(text, start, end, 'end');
   } else {
-    el.value = el.value.slice(0, start) + sym + el.value.slice(end);
+    el.value = el.value.slice(0, start) + text + el.value.slice(end);
   }
   el.focus();
   el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2449,10 +2521,11 @@ function insertSymbol(sym) {
 
 // Wraps the current selection in `before`/`after` markers (toggling them
 // off if the selection is already wrapped). With no selection, inserts an
-// empty pair and places the cursor in between.
+// empty pair and places the cursor in between. Plain text fields only —
+// the math-field uses insertMathTemplate() instead.
 function wrapSymbolSelection(before, after) {
   const el = getActiveSymbolField();
-  if (!el) return;
+  if (!el || isMathField(el)) return;
   const start = el.selectionStart != null ? el.selectionStart : el.value.length;
   const end   = el.selectionEnd   != null ? el.selectionEnd   : el.value.length;
   const sel = el.value.slice(start, end);
@@ -2470,16 +2543,30 @@ function wrapSymbolSelection(before, after) {
   el.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-function insertItalic()    { wrapSymbolSelection('*', '*'); }
-function insertSubscript() { wrapSymbolSelection('_{', '}'); }
+// Inserts a LaTeX template (fraction, superscript, subscript) into the
+// math-field. MathLive automatically places the cursor in the first empty
+// group, so the person can start typing the numerator / exponent right away.
+function insertMathTemplate(latex) {
+  const el = getActiveSymbolField();
+  if (!el || !isMathField(el)) return;
+  el.focus();
+  el.insert(latex, { focus: true });
+}
+
+function insertItalic()     { wrapSymbolSelection('*', '*'); }
+function insertSubscriptText() { wrapSymbolSelection('_{', '}'); }
+function insertFraction()   { insertMathTemplate('\\frac{}{}'); }
+function insertSuperscript(){ insertMathTemplate('^{}'); }
+function insertSubscriptMath() { insertMathTemplate('_{}'); }
 
 function symBtnsHTML(arr) {
-  return arr.map(s => {
-    const safe = s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    const label = s === 'lim' ? '<span style="font-size:11px;">lim</span>' : esc(s);
-    return `<button type="button" class="symbol-btn" onmousedown="event.preventDefault()" onclick="insertSymbol('${safe}')" title="Insert ${esc(s)}">${label}</button>`;
+  return arr.map((item, i) => {
+    const label = item.c === 'lim' ? '<span style="font-size:11px;">lim</span>' : esc(item.c);
+    return `<button type="button" class="symbol-btn" data-group="${arr === GREEK_SYMBOLS ? 'greek' : arr === ARITH_SYMBOLS ? 'arith' : arr === ROOT_SYMBOLS ? 'root' : 'calc'}" data-idx="${i}" onmousedown="event.preventDefault()" title="Insert ${esc(item.label || item.c)}">${label}</button>`;
   }).join('');
 }
+
+const SYMBOL_GROUPS = { greek: GREEK_SYMBOLS, arith: ARITH_SYMBOLS, root: ROOT_SYMBOLS, calc: CALC_SYMBOLS };
 
 function buildSymbolPanel() {
   return `
@@ -2488,44 +2575,76 @@ function buildSymbolPanel() {
       <button class="icon-btn" onclick="closeSymbolPanel()" title="Hide"><i class="ti ti-x"></i></button>
     </div>
     <div>
-      <div class="symbol-group-label">ギリシャ文字</div>
+      <div class="symbol-group-label">Greek Letters</div>
       <div class="symbol-grid">${symBtnsHTML(GREEK_SYMBOLS)}</div>
     </div>
     <div>
-      <div class="symbol-group-label">四則演算・関係</div>
+      <div class="symbol-group-label">Arithmetic &amp; Relations</div>
       <div class="symbol-grid">${symBtnsHTML(ARITH_SYMBOLS)}</div>
     </div>
     <div>
-      <div class="symbol-group-label">ルート・べき乗</div>
+      <div class="symbol-group-label">Roots &amp; Powers</div>
       <div class="symbol-grid">${symBtnsHTML(ROOT_SYMBOLS)}</div>
     </div>
     <div>
-      <div class="symbol-group-label">微積分・その他</div>
+      <div class="symbol-group-label">Calculus &amp; Other</div>
       <div class="symbol-grid">${symBtnsHTML(CALC_SYMBOLS)}</div>
     </div>
-    <div class="symbol-actions-row">
-      <button type="button" class="symbol-action-btn" onmousedown="event.preventDefault()" onclick="insertItalic()" title="選択範囲を斜体にする">
-        <i style="font-style:italic;">i</i> 斜体
+    <div class="symbol-actions-row" id="symbol-actions-math">
+      <button type="button" class="symbol-action-btn" onmousedown="event.preventDefault()" onclick="insertFraction()" title="Insert a fraction (a/b)">
+        a/b Fraction
       </button>
-      <button type="button" class="symbol-action-btn" onmousedown="event.preventDefault()" onclick="insertSubscript()" title="選択範囲を下付き文字にする（log の底、F_A など）">
-        x<sub>y</sub> 下付き
+      <button type="button" class="symbol-action-btn" onmousedown="event.preventDefault()" onclick="insertSuperscript()" title="Insert a superscript (exponent)">
+        x<sup>y</sup> Superscript
+      </button>
+      <button type="button" class="symbol-action-btn" onmousedown="event.preventDefault()" onclick="insertSubscriptMath()" title="Insert a subscript (e.g. log base, F_A)">
+        x<sub>y</sub> Subscript
+      </button>
+    </div>
+    <div class="symbol-actions-row hidden" id="symbol-actions-text">
+      <button type="button" class="symbol-action-btn" onmousedown="event.preventDefault()" onclick="insertItalic()" title="Italicize the selected text">
+        <i style="font-style:italic;">i</i> Italic
+      </button>
+      <button type="button" class="symbol-action-btn" onmousedown="event.preventDefault()" onclick="insertSubscriptText()" title="Make the selected text a subscript (e.g. log base, F_A)">
+        x<sub>y</sub> Subscript
       </button>
     </div>
     <p class="symbol-panel-hint">
-      文字を選択してボタンを押すと反転／下付き化されます。log の底や F<sub>A</sub> のような下付きは、文字を選んで「下付き」を押すと <code style="font-family:monospace;">_{ }</code> で囲まれ、カード詳細では下付き文字として表示されます。
+      Click a symbol to insert it into whichever field you last clicked into (Expression, Units, or Description). In the Expression field, type naturally too — e.g. "a/b" becomes a fraction and "sqrt" becomes a root sign. For Units/Description, select text first, then press Italic or Subscript to format it.
     </p>
   `;
+}
+
+// Symbol buttons are wired up with a delegated listener (rather than
+// inline onclick handlers) so the LaTeX payload never has to be escaped
+// into an HTML attribute string.
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.symbol-btn');
+  if (!btn) return;
+  const group = SYMBOL_GROUPS[btn.dataset.group];
+  const item = group && group[Number(btn.dataset.idx)];
+  if (item) insertSymbol(item);
+});
+
+// Shows the math-specific action row (Fraction / Superscript / Subscript)
+// when the Expression math-field is focused, or the plain-text row
+// (Italic / Subscript) for the other fields.
+function refreshSymbolActionsRow() {
+  const mathRow = document.getElementById('symbol-actions-math');
+  const textRow = document.getElementById('symbol-actions-text');
+  if (!mathRow || !textRow) return;
+  const onMath = activeSymbolFieldId === 'f-expr';
+  mathRow.classList.toggle('hidden', !onMath);
+  textRow.classList.toggle('hidden', onMath);
 }
 
 function openSymbolPanel() {
   const panel = document.getElementById('symbol-panel');
   if (!panel) return;
-  if (!panel.dataset.built) {
-    panel.innerHTML = buildSymbolPanel();
-    panel.dataset.built = '1';
-  }
+  panel.innerHTML = buildSymbolPanel();
   panel.classList.remove('hidden');
   activeSymbolFieldId = 'f-expr';
+  refreshSymbolActionsRow();
 }
 
 function closeSymbolPanel() {
