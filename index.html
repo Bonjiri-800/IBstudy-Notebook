@@ -15,14 +15,14 @@
   :root {
     --accent: #2a52a0;
     --accent-light: #e8edf8;
-    --border: #e4e7ed;
-    --bg: #f7f8fa;
+    --border: #e2e4ea;
+    --bg: #fbfbfc;
     --card: #ffffff;
     --sidebar-bg: #ffffff;
-    --sidebar-border: #e4e7ed;
-    --text: #111318;
-    --text-2: #5a5f6e;
-    --text-3: #a0a7b8;
+    --sidebar-border: #e2e4ea;
+    --text: #08090b;
+    --text-2: #3c4150;
+    --text-3: #767c8c;
     --radius-md: 8px;
     --radius-lg: 14px;
     --shadow: 0 1px 4px rgba(0,0,0,0.06);
@@ -269,6 +269,32 @@
   /* ── Content ── */
   .content { padding: 1.75rem 2rem; flex: 1; }
 
+  /* ── Bulk selection (marquee drag-select) ── */
+  .bulk-actions-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 2rem;
+    background: var(--accent-light); color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    font-size: 13.5px; font-weight: 500;
+  }
+  .bulk-actions-bar.hidden { display: none; }
+  .bulk-actions-bar i { font-size: 16px; }
+  .bulk-actions-spacer { flex: 1; }
+  .bulk-actions-bar .btn { background: var(--card); }
+
+  .marquee-box {
+    position: fixed;
+    border: 1.5px solid var(--accent);
+    background: rgba(42,82,160,0.08);
+    z-index: 60;
+    pointer-events: none;
+  }
+
+  .card.card-selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent), var(--shadow-lg);
+  }
+
   /* ── Cards ── */
   .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
   .vocab-grid    { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
@@ -324,23 +350,25 @@
 
   .formula-name  { font-size: 15px; font-weight: 500; margin-bottom: 8px; }
   .formula-expr  {
-    font-family: 'Courier New', monospace;
-    font-size: 14px; font-weight: 500;
+    font-size: 16px; font-weight: 500;
     background: var(--accent-light); color: var(--accent);
     border-radius: var(--radius-md);
-    padding: 7px 11px; margin-bottom: 7px;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    padding: 10px 11px; margin-bottom: 7px;
+    max-height: 62px;
+    overflow-x: auto; overflow-y: hidden;
+    white-space: nowrap;
   }
+  .formula-expr .ML__base { color: var(--accent); }
   .formula-desc  { font-size: 12.5px; color: var(--text-2); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .formula-unit  { font-size: 11.5px; color: var(--text-3); margin-top: 5px; }
   .detail-formula-expr {
-    font-family: 'Courier New', monospace;
-    font-size: 17px; font-weight: 500;
+    font-size: 20px; font-weight: 500;
     background: var(--accent-light); color: var(--accent);
     border-radius: var(--radius-md);
-    padding: 13px 16px; margin-bottom: 1.1rem;
-    word-break: break-all; line-height: 1.6;
+    padding: 16px 18px; margin-bottom: 1.1rem;
+    overflow-x: auto;
   }
+  .detail-formula-expr .ML__base { color: var(--accent); }
 
   .card-footer {
     display: flex; align-items: center; justify-content: space-between;
@@ -888,6 +916,14 @@
       </div>
     </header>
 
+    <div class="bulk-actions-bar hidden" id="bulk-actions-bar">
+      <i class="ti ti-square-check"></i>
+      <span id="bulk-count">0 selected</span>
+      <span class="bulk-actions-spacer"></span>
+      <button class="btn" onclick="clearSelection()"><i class="ti ti-x"></i> Clear</button>
+      <button class="btn btn-danger" onclick="bulkDeleteSelected()"><i class="ti ti-trash"></i> Delete Selected</button>
+    </div>
+
     <div class="content" id="main-content"></div>
   </div>
 </div>
@@ -1137,6 +1173,109 @@ let state = {
   subjects: null,
 };
 
+// ─────────────────────────────────────────────
+// Multi-select (marquee / rubber-band drag-select) + bulk delete
+// ─────────────────────────────────────────────
+// Click-and-drag over empty space inside a card grid draws a selection
+// rectangle; any card it overlaps gets selected (hold Shift to add to the
+// existing selection instead of replacing it). Selected cards can then be
+// bulk-deleted from the bar at the top, or — in Manual sort mode — dragged
+// together as a group (see the multiDrag wiring in enableDrag()).
+let selectedIds = new Set();
+let selectionType = null; // which tab ('case'|'vocab'|'formula'|'exam'|'others') the ids belong to
+
+function clearSelection() {
+  selectedIds = new Set();
+  selectionType = null;
+  document.querySelectorAll('.card.card-selected').forEach(el => el.classList.remove('card-selected'));
+  updateBulkBar();
+}
+
+function applySelectionClasses() {
+  document.querySelectorAll('#sortable-grid .card').forEach(el => {
+    el.classList.toggle('card-selected', selectionType === state.tab && selectedIds.has(el.dataset.id));
+  });
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('bulk-actions-bar');
+  if (!bar) return;
+  if (selectedIds.size > 0) {
+    bar.classList.remove('hidden');
+    const label = document.getElementById('bulk-count');
+    if (label) label.textContent = selectedIds.size + (selectedIds.size===1 ? ' item selected' : ' items selected');
+  } else {
+    bar.classList.add('hidden');
+  }
+}
+
+function bulkDeleteSelected() {
+  if (!selectionType || !selectedIds.size) return;
+  const key = TYPE_KEY[selectionType];
+  const ids = new Set(selectedIds);
+  const count = ids.size;
+  confirmDelete(`Delete ${count} selected item${count > 1 ? 's' : ''}? This cannot be undone.`, () => {
+    state[key] = state[key].filter(item => !ids.has(item.id));
+    clearSelection();
+    save(); render();
+  });
+}
+
+let marqueeEl = null, marqueeStart = null, marqueeBase = new Set(), marqueeShift = false;
+
+document.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;                      // left click only
+  const grid = e.target.closest('#sortable-grid');
+  if (!grid) return;
+  if (e.target.closest('.card')) return;            // clicking/dragging a card itself is handled elsewhere
+  marqueeShift = e.shiftKey;
+  marqueeBase = new Set(selectedIds);
+  if (!marqueeShift) clearSelection();
+  selectionType = state.tab;
+  marqueeStart = { x: e.clientX, y: e.clientY };
+  marqueeEl = document.createElement('div');
+  marqueeEl.className = 'marquee-box';
+  document.body.appendChild(marqueeEl);
+  positionMarquee(e.clientX, e.clientY);
+  e.preventDefault();
+});
+
+document.addEventListener('mousemove', e => {
+  if (!marqueeEl) return;
+  positionMarquee(e.clientX, e.clientY);
+  recomputeMarqueeSelection();
+});
+
+document.addEventListener('mouseup', () => {
+  if (!marqueeEl) return;
+  marqueeEl.remove();
+  marqueeEl = null;
+  marqueeStart = null;
+});
+
+function positionMarquee(x, y) {
+  const left = Math.min(x, marqueeStart.x);
+  const top  = Math.min(y, marqueeStart.y);
+  marqueeEl.style.left   = left + 'px';
+  marqueeEl.style.top    = top + 'px';
+  marqueeEl.style.width  = Math.abs(x - marqueeStart.x) + 'px';
+  marqueeEl.style.height = Math.abs(y - marqueeStart.y) + 'px';
+}
+
+function recomputeMarqueeSelection() {
+  const r1 = marqueeEl.getBoundingClientRect();
+  const hit = new Set();
+  document.querySelectorAll('#sortable-grid .card').forEach(cardEl => {
+    const r2 = cardEl.getBoundingClientRect();
+    const intersects = !(r2.right < r1.left || r2.left > r1.right || r2.bottom < r1.top || r2.top > r1.bottom);
+    if (intersects) hit.add(cardEl.dataset.id);
+  });
+  selectedIds = marqueeShift ? new Set([...marqueeBase, ...hit]) : hit;
+  selectionType = state.tab;
+  applySelectionClasses();
+  updateBulkBar();
+}
+
 // One-time migration: the single-value "group" field was upgraded to a
 // "groups" array so each item can carry multiple tags. Convert any legacy
 // string value into a one-element array (or empty array if absent) so
@@ -1232,6 +1371,7 @@ function toggleSort() {
   const order = ['manual', 'asc', 'desc'];
   state.sort = order[(order.indexOf(state.sort) + 1) % order.length];
   applySortButton();
+  clearSelection();
   render();
 }
 
@@ -1244,6 +1384,7 @@ function getSorted(list) {
 
 function setTab(t) {
   state.tab = t;
+  clearSelection();
   ['case','vocab','formula','exam','others'].forEach(k => {
     document.getElementById('nav-'+k).classList.toggle('active', k===t);
   });
@@ -1525,6 +1666,14 @@ function readTagBox(boxId) {
 let sortableInstance = null;
 const TYPE_KEY = { case:'cases', vocab:'vocabs', formula:'formulas', exam:'exams', others:'others' };
 
+// MultiDrag lets dragging any one *selected* card move the whole selected
+// group together. It ships bundled in the Sortable.min.js build but has to
+// be mounted once before use. Guarded so the app still works (single-item
+// drag only) if the CDN build in use doesn't include it.
+if (typeof Sortable !== 'undefined' && Sortable.MultiDrag) {
+  try { Sortable.mount(new Sortable.MultiDrag()); } catch(e) {}
+}
+
 function destroySortable() {
   if (sortableInstance) {
     try { sortableInstance.destroy(); } catch(e) {}
@@ -1547,11 +1696,27 @@ function enableDrag(type) {
     ghostClass: 'sortable-ghost',
     chosenClass: 'sortable-chosen',
     dragClass: 'sortable-drag',
+    // Multi-drag: dragging any card that's part of the current marquee
+    // selection (see "Multi-select" section below) moves the whole group.
+    // multiDragKey is set to a key that's never pressed so SortableJS's own
+    // ctrl/cmd-click selection never kicks in — our marquee selection is
+    // the only way to build a multi-selection, avoiding double bookkeeping.
+    multiDrag: true,
+    selectedClass: 'card-selected',
+    multiDragKey: 'NeverTriggered',
     onEnd: () => {
       const ids = [...grid.querySelectorAll('.card')].map(el => el.dataset.id);
       reorderByVisible(type, ids);
+      clearSelection();
     }
   });
+  // Sync our own marquee-based selection into SortableJS's multi-drag
+  // bookkeeping so dragging one selected card carries the rest along.
+  if (Sortable.utils && Sortable.utils.select && selectionType === type) {
+    grid.querySelectorAll('.card').forEach(el => {
+      if (selectedIds.has(el.dataset.id)) Sortable.utils.select(el);
+    });
+  }
 }
 
 // Reorder the full array using the new order of the currently *visible* cards,
@@ -1572,7 +1737,7 @@ function reorderByVisible(type, newVisibleIds) {
   // DOM already reflects the new order, so no re-render is needed here.
 }
 
-const DRAG_HINT = `<div class="drag-hint"><i class="ti ti-arrows-move"></i> Drag cards to reorder — this Manual order is saved</div>`;
+const DRAG_HINT = `<div class="drag-hint"><i class="ti ti-arrows-move"></i> Drag cards to reorder — this Manual order is saved. Drag-select (click an empty area and drag) to select multiple cards.</div>`;
 
 function render() {
   destroySortable();
@@ -1584,6 +1749,7 @@ function render() {
   else if (t==='formula') renderFormulas();
   else if (t==='exam')    renderExams();
   else if (t==='others')  renderOthers();
+  applySelectionClasses();
 }
 
 function updateStats() {
@@ -2475,6 +2641,12 @@ const CALC_SYMBOLS = [
   {c:'∞',l:'\\infty'}, {c:'→',l:'\\to'}, {c:'∈',l:'\\in'}, {c:'∇',l:'\\nabla'},
   {c:'lim',l:'\\lim'},
 ];
+const MARK_SYMBOLS = [
+  {c:'′',  l:"'",   label:"Prime, e.g. f'(x)"},
+  {c:'″',  l:"''",  label:'Double prime'},
+  {c:'‴',  l:"'''", label:'Triple prime'},
+  {c:'−',  l:'-',   label:'Minus sign'},
+];
 
 const SYMBOL_FIELD_IDS = ['f-expr','f-name','f-units','f-desc'];
 let activeSymbolFieldId = 'f-expr';
@@ -2559,14 +2731,14 @@ function insertFraction()   { insertMathTemplate('\\frac{}{}'); }
 function insertSuperscript(){ insertMathTemplate('^{}'); }
 function insertSubscriptMath() { insertMathTemplate('_{}'); }
 
-function symBtnsHTML(arr) {
+function symBtnsHTML(arr, groupKey) {
   return arr.map((item, i) => {
     const label = item.c === 'lim' ? '<span style="font-size:11px;">lim</span>' : esc(item.c);
-    return `<button type="button" class="symbol-btn" data-group="${arr === GREEK_SYMBOLS ? 'greek' : arr === ARITH_SYMBOLS ? 'arith' : arr === ROOT_SYMBOLS ? 'root' : 'calc'}" data-idx="${i}" onmousedown="event.preventDefault()" title="Insert ${esc(item.label || item.c)}">${label}</button>`;
+    return `<button type="button" class="symbol-btn" data-group="${groupKey}" data-idx="${i}" onmousedown="event.preventDefault()" title="Insert ${esc(item.label || item.c)}">${label}</button>`;
   }).join('');
 }
 
-const SYMBOL_GROUPS = { greek: GREEK_SYMBOLS, arith: ARITH_SYMBOLS, root: ROOT_SYMBOLS, calc: CALC_SYMBOLS };
+const SYMBOL_GROUPS = { greek: GREEK_SYMBOLS, arith: ARITH_SYMBOLS, root: ROOT_SYMBOLS, calc: CALC_SYMBOLS, mark: MARK_SYMBOLS };
 
 function buildSymbolPanel() {
   return `
@@ -2576,19 +2748,23 @@ function buildSymbolPanel() {
     </div>
     <div>
       <div class="symbol-group-label">Greek Letters</div>
-      <div class="symbol-grid">${symBtnsHTML(GREEK_SYMBOLS)}</div>
+      <div class="symbol-grid">${symBtnsHTML(GREEK_SYMBOLS, 'greek')}</div>
     </div>
     <div>
       <div class="symbol-group-label">Arithmetic &amp; Relations</div>
-      <div class="symbol-grid">${symBtnsHTML(ARITH_SYMBOLS)}</div>
+      <div class="symbol-grid">${symBtnsHTML(ARITH_SYMBOLS, 'arith')}</div>
     </div>
     <div>
       <div class="symbol-group-label">Roots &amp; Powers</div>
-      <div class="symbol-grid">${symBtnsHTML(ROOT_SYMBOLS)}</div>
+      <div class="symbol-grid">${symBtnsHTML(ROOT_SYMBOLS, 'root')}</div>
     </div>
     <div>
       <div class="symbol-group-label">Calculus &amp; Other</div>
-      <div class="symbol-grid">${symBtnsHTML(CALC_SYMBOLS)}</div>
+      <div class="symbol-grid">${symBtnsHTML(CALC_SYMBOLS, 'calc')}</div>
+    </div>
+    <div>
+      <div class="symbol-group-label">Primes &amp; Marks</div>
+      <div class="symbol-grid">${symBtnsHTML(MARK_SYMBOLS, 'mark')}</div>
     </div>
     <div class="symbol-actions-row" id="symbol-actions-math">
       <button type="button" class="symbol-action-btn" onmousedown="event.preventDefault()" onclick="insertFraction()" title="Insert a fraction (a/b)">
